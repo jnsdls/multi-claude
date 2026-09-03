@@ -81,9 +81,9 @@ So `list` marks Needs login when the credential is absent, or `accessToken` is e
 
 Claude Code zeroes only when the stored `refreshToken` still equals the one it posted (`JUe`), so a concurrent session that already rotated the token is never clobbered.
 
-## Not measured
+## Not measured on 2026-09-03, morning
 
-The success path with a real refresh token. The only login on this machine backs the session that did this work, and Claude Code rotates refresh tokens on every refresh, so copying that credential into a test dir would have handed the rotation to the copy and left the real login with a dead token. The claim that the trigger writes a fresh token back before exiting rests on the code: `GU` returns the new tokens, the caller saves them through the same `mutate` the zeroing uses, and the API request that follows awaits all of it. It should be confirmed on the first Account added through mclaude, once its token is inside the margin; see the follow-up ticket on the map.
+The success path with a real refresh token. Confirmed later the same day, see [Success path, confirmed](#success-path-confirmed) below. The only login on this machine backs the session that did this work, and Claude Code rotates refresh tokens on every refresh, so copying that credential into a test dir would have handed the rotation to the copy and left the real login with a dead token. The claim that the trigger writes a fresh token back before exiting rests on the code: `GU` returns the new tokens, the caller saves them through the same `mutate` the zeroing uses, and the API request that follows awaits all of it. It should be confirmed on the first Account added through mclaude, once its token is inside the margin; see the follow-up ticket on the map.
 
 Linux was not run. The code path is the same and the write lands in `.credentials.json` instead of the Keychain.
 
@@ -131,3 +131,63 @@ for i in {1..10}; do run "auth status #$i" claude auth status; done
 - Claude Code 2.1.259 binary, `strings` of `~/.local/share/claude/versions/2.1.259`: OAuth config (`Jt`, `TOKEN_URL` and the three-host allowlist behind `CLAUDE_CODE_CUSTOM_OAUTH_URL`), refresh (`GU`, `_1`, `qU`, `JUe`, `t0`, `n0`), retry cap (`Uit`, `CLAUDE_CODE_MAX_RETRIES`), the claude.ai connector fetch (`await Li` before `[claudeai-mcp] No access token`).
 - Runs on this Mac, 2026-09-03, as tabled above. Debug log from `claude --debug mcp list` for the refresh timestamp.
 - [token-read](token-read.md) for the storage layout and the expiry flow this note closes out.
+
+## Success path, confirmed
+
+Run later on 2026-09-03 for [#29](https://github.com/jnsdls/multi-claude/issues/29), same Claude Code 2.1.259, same Mac. No Account added through mclaude existed yet and the real login's token had four hours left, so the margin was forced. The harness rewrote `expiresAt` in the real Keychain item (`Claude Code-credentials`, the default `~/.claude` dir) to sixty seconds ahead and ran the trigger with no config dir variables set. Claude Code sees a token inside its five-minute margin and refreshes with the real refresh token, the same thing it does on its own every eight hours. Each run rotates the pair for real.
+
+Five forced runs, five write-backs before exit.
+
+| Run | Flags beyond the recipe            | Wall   | Exit | `expiresAt` after | Access token | Refresh token | Transcript |
+| --- | ---------------------------------- | ------ | ---- | ----------------- | ------------ | ------------- | ---------- |
+| 1   |                                    | 1.24 s | 1    | now + 28 800 s    | new          | new           | written    |
+| 2   |                                    | 1.18 s | 1    | now + 28 800 s    | new          | new           | written    |
+| 3   | `--debug`                          | 1.14 s | 1    | now + 28 800 s    | new          | new           | written    |
+| 4   | env `CLAUDE_CODE_CHILD_SESSION=1`  | 1.17 s | 1    | now + 28 800 s    | new          | new           | written    |
+| 5   | `--no-session-persistence`         | 1.16 s | 1    | now + 28 800 s    | new          | new           | none       |
+
+Tokens were compared by sha256 against the credential read before each run. Every run produced a new access token, a new refresh token, an `expiresAt` eight hours ahead and a reissued `refreshTokenExpiresAt`. The after-read ran once the process had exited, so the write lands before exit. `claude auth status` said `loggedIn: true` after the last run, and the Claude Code session driving this work kept going on the rotated credential, which is the concurrent-session case the `JUe` guard exists for.
+
+The debug log from run 3 shows the model request dispatched to `/v1/messages` and refused at +0.6 s. Nothing reached a model. Two requests do go to `api.anthropic.com` with the bearer token: the bootstrap fetch and the claude.ai MCP connector list at `/v1/mcp_servers`. Neither counts against a Window.
+
+About 1.2 s here against 0.8 s in the isolated dir. The Shared home is the difference: the real dir loads 28 skills, the plugins and the settings watchers.
+
+### The trigger leaves a transcript
+
+The isolated-dir runs above say no transcript. Under a real home that is wrong. Runs 1 to 4 each wrote `projects/<cwd key>/<session id>.jsonl`, 14 KB holding the `hi` prompt and the API error as an assistant turn, plus an empty `memory/` dir beside it. `CLAUDE_CODE_CHILD_SESSION=1` did not stop it (run 4). `--no-session-persistence` did (run 5): no `.jsonl`, and the refresh still landed. The empty `projects/<cwd key>/memory/` dir still appears. So the recipe gains one flag:
+
+```sh
+ANTHROPIC_BASE_URL=http://127.0.0.1:9 CLAUDE_CODE_MAX_RETRIES=0 \
+  claude -p hi --max-turns 1 --no-session-persistence \
+  --strict-mcp-config --mcp-config '{"mcpServers":{}}' </dev/null
+```
+
+This matters because every Account dir symlinks `projects/` into the Shared home. Without the flag a trigger run shows up in `claude --resume` for whatever cwd it ran in. With it, what is left is one empty dir per cwd. Run the trigger with the Account dir as cwd and that is one empty `projects/<account dir key>/memory/` per Account, nothing in the resume picker.
+
+### Forced-margin harness
+
+```sh
+#!/bin/zsh
+# One forced-margin run of the Refresh trigger against the real default login.
+# Rotates the real refresh token. Back up the Keychain item first.
+SVC="Claude Code-credentials"
+CWD=/tmp/mclaude-refresh-real
+unset CLAUDE_CONFIG_DIR CLAUDE_SECURESTORAGE_CONFIG_DIR
+unset CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_CHILD_SESSION CLAUDECODE CLAUDE_CODE_SESSION_ID CLAUDE_PID
+label=$1
+fp() { local j; j=$(cat); echo "at=$(jq -r .claudeAiOauth.accessToken <<<"$j" | shasum -a 256 | cut -c1-12) rt=$(jq -r .claudeAiOauth.refreshToken <<<"$j" | shasum -a 256 | cut -c1-12) exp=$(jq -r .claudeAiOauth.expiresAt <<<"$j")"; }
+before=$(/usr/bin/security find-generic-password -a "$USER" -s "$SVC" -w)
+forced=$(( $(date +%s) * 1000 + 60000 ))
+edited=$(jq -c --argjson e "$forced" '.claudeAiOauth.expiresAt=$e' <<<"$before")
+/usr/bin/security add-generic-password -U -a "$USER" -s "$SVC" -w "$edited"
+echo "[$label] before: $(fp <<<"$edited")"
+mkdir -p $CWD && cd $CWD
+t0=$(python3 -c 'import time;print(time.time())')
+ANTHROPIC_BASE_URL=http://127.0.0.1:9 CLAUDE_CODE_MAX_RETRIES=0 \
+  claude -p hi --max-turns 1 --no-session-persistence --strict-mcp-config --mcp-config '{"mcpServers":{}}' </dev/null >$CWD/out-$label.txt 2>$CWD/err-$label.txt
+rc=$?
+wall=$(python3 -c "import time;print(round(time.time()-$t0,2))")
+after=$(/usr/bin/security find-generic-password -a "$USER" -s "$SVC" -w)
+echo "[$label] rc=$rc wall=${wall}s"
+echo "[$label] after:  $(fp <<<"$after")"
+```
