@@ -39,6 +39,10 @@ _Avoid_: Profile dir, config dir (that is Claude Code's name for the mechanism, 
 **Shared home**:
 The user's real Claude Code directory, holding settings, memory, plugins, skills and session history. Every Account dir links back to it so all Accounts see one setup.
 
+**Preferences**:
+The part of Claude Code's global config that says how the user wants it to behave and which MCP servers and project approvals it knows, as opposed to who is logged in. Owned by the Shared home and copied into every Account dir before a launch.
+_Avoid_: Settings (that is Claude Code's `settings.json`), config, prefs
+
 **Window**:
 One usage budget with its own reset time. Claude reports a session window (5 hours), a weekly window (all models) and per-model weekly windows.
 _Avoid_: Bucket, quota, limit (see Limit)
