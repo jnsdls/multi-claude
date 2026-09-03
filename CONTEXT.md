@@ -63,11 +63,23 @@ _Avoid_: Rate limit (Claude's transient 429 backoff is not a Limit), wall, exhau
 The moment a Window's Utilization returns to zero.
 
 **Active account**:
-The Account mclaude last launched under. Selection is sticky: the Active account keeps being chosen until it has no Headroom.
+The Account mclaude last launched under by Selection or a Pin. Selection is sticky: the Active account keeps being chosen until it has no Headroom or is Disabled. A Fallback or Override launch leaves it unchanged.
 _Avoid_: Current, default, primary
 
+**Pin**:
+A standing order to launch every Passthrough on one named Account until unpinned, whatever its Headroom. A pinned Account past the Switch threshold or holding a Limit is still launched, and no Handoff leaves it.
+_Avoid_: Lock, force, sticky (that is Selection's own behaviour)
+
+**Override**:
+A Pin for one launch only, given on the command line or by the host's environment. Wins over a Pin and over Selection, and does not make its Account the Active account.
+_Avoid_: Account flag, forced account
+
+**Disabled**:
+The state of an Account the user has taken out of Selection, Fallback and Handoff while keeping its Record and login. `list` still shows it, and a Pin or Override still launches it.
+_Avoid_: Paused, inactive, hidden
+
 **Selection**:
-The rule that chooses the Account for a Session start: stay on the Active account unless it is past the Switch threshold or holds a Limit for the Requested model, else the Account with the most Headroom whose Utilization is under the Switch threshold; when no Account qualifies, stay put.
+The rule that chooses the Account for a Session start when no Pin or Override names one: stay on the Active account unless it is Disabled, past the Switch threshold or holds a Limit for the Requested model, else the Account with the most Headroom whose Utilization is under the Switch threshold; when no Account qualifies, stay put. Disabled Accounts are never candidates.
 _Avoid_: Rotation, balancing, strategy
 
 **Switch threshold**:
@@ -83,14 +95,14 @@ Ending Claude Code after a Limit and relaunching it on another Account with the 
 _Avoid_: Switch, swap, failover, migration
 
 **Exhausted**:
-The state where no Account has Headroom for the requested model. An Account has no Headroom only when the tightest Window reads full or it reported a Limit in that Window; a Selection threshold never makes an Account Exhausted.
+The state where no Account that Selection may choose has Headroom for the requested model; under a Pin or Override only the named Account counts. An Account has no Headroom only when the tightest Window reads full or it reported a Limit in that Window; a Selection threshold never makes an Account Exhausted.
 
 **Credits**:
 Anthropic's pay-as-you-go extra usage enabled on an Account, spent once its Windows are full. Never Headroom; the second tier of Fallback.
 _Avoid_: Overage, extra usage, budget
 
 **Fallback**:
-The Account launched when Exhausted: an Unknown Account first, then one with Credits and its spend limit not reached, then the one whose tightest Window resets soonest. A Fallback Account is never sticky.
+The Account launched when Exhausted: an Unknown Account first, then one with Credits and its spend limit not reached, then the one whose tightest Window resets soonest. Disabled Accounts are skipped. A Fallback Account is never sticky.
 _Avoid_: Least-bad, last resort, degraded
 
 **Unknown**:
@@ -102,7 +114,7 @@ Any invocation mclaude forwards to Claude Code unchanged apart from choosing the
 _Avoid_: Proxy, wrapper mode
 
 **Reserved word**:
-A first argument mclaude keeps for itself instead of forwarding: `account`, which holds the management commands, `version`, and `hook`, which is what the Limit hook runs. A bare `--` forces Passthrough of whatever follows.
+A first argument mclaude keeps for itself instead of forwarding: `account`, which holds the management commands (add, remove, list, rename, login, pin, unpin, enable, disable), `version`, and `hook`, which is what the Limit hook runs. A bare `--` forces Passthrough of whatever follows.
 _Avoid_: Subcommand, namespace
 
 **Limit hook**:
