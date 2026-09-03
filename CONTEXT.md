@@ -44,7 +44,7 @@ What is left in the Window that matters for a launch: the tightest of the Window
 _Avoid_: Remaining, budget, credits
 
 **Limit**:
-The event of Claude rejecting a request because a Window is fully used. Carries which Window and when it resets.
+The event of Claude rejecting a request because a Window is fully used. Recorded against the Account and its Window, and trusted until that Window's Reset or a later reading showing the Window open.
 _Avoid_: Rate limit (Claude's transient 429 backoff is not a Limit), wall, exhaustion (see Exhausted)
 
 **Reset**:
@@ -55,8 +55,16 @@ The Account mclaude last launched under. Selection is sticky: the Active account
 _Avoid_: Current, default, primary
 
 **Selection**:
-The rule that chooses the Account for a launch: stay on the Active account unless it is past the switch threshold or reported a Limit, else the Account with the most Headroom.
+The rule that chooses the Account for a Session start: stay on the Active account unless it is past the Switch threshold or holds a Limit for the Requested model, else the Account with the most Headroom whose Utilization is under the Switch threshold; when no Account qualifies, stay put.
 _Avoid_: Rotation, balancing, strategy
+
+**Switch threshold**:
+The Utilization of the Active account's tightest applicable Window above which Selection looks for another Account. A preference, never a wall: an Account past it still has Headroom.
+_Avoid_: Limit, cutoff, budget
+
+**Requested model**:
+The model a Session start will run under, as far as mclaude can tell from the arguments, environment and settings. When it cannot tell, every per-model Window counts toward Headroom.
+_Avoid_: Target model, default model
 
 **Handoff**:
 Relaunching Claude Code on another Account with the same conversation resumed and the original arguments intact, after a Limit.
