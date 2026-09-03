@@ -17,7 +17,7 @@ The human label for an Account, shown by `list` and accepted wherever an Account
 _Avoid_: Name, label, nickname
 
 **Record**:
-What mclaude remembers about one Account: its identity, its alias, the last usage reading and the last Limit it reported. An Account exists once its Record exists.
+What mclaude remembers about one Account: its identity, its Alias, its last Reading and the last Limit it reported. An Account exists once its Record exists.
 _Avoid_: State entry, profile, cache
 
 **Orphan**:
@@ -105,9 +105,13 @@ _Avoid_: Overage, extra usage, budget
 The Account launched when Exhausted: an Unknown Account first, then one with Credits and its spend limit not reached, then the one whose tightest Window resets soonest. Disabled Accounts are skipped. A Fallback Account is never sticky.
 _Avoid_: Least-bad, last resort, degraded
 
+**Reading**:
+The usage figures last fetched for an Account: its Windows with their Utilization and Reset, and whether Credits are enabled. Fresh for a short while after the fetch, stale after that, and still trusted until a Reset in it passes. A failed fetch leaves the last Reading in force.
+_Avoid_: Cache entry, snapshot, poll result, usage
+
 **Unknown**:
-The state of an Account whose Headroom cannot currently be read (endpoint throttled, hollow response, token unreadable). Distinct from Exhausted: an Unknown Account may still be tried.
-_Avoid_: Stale, unavailable, failed
+The state of an Account with no Reading to decide on: none was ever taken, or a Reset in the last one has passed and a fresh one could not be fetched. A throttled endpoint or a hollow response does not make an Account Unknown while its Reading still stands. Distinct from Exhausted: an Unknown Account may still be tried.
+_Avoid_: Stale (that is a Reading past its fresh age, still trusted), unavailable, failed
 
 **Passthrough**:
 Any invocation mclaude forwards to Claude Code unchanged apart from choosing the Account and appending a session id and the Limit hook. Everything whose first word is not a Reserved word.
