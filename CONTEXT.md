@@ -5,8 +5,24 @@ A launcher that runs the Claude Code CLI under one of several subscription accou
 ## Language
 
 **Account**:
-One Claude subscription login (Pro, Max, Team or Enterprise seat) registered with mclaude. Identified by the email and account uuid Claude Code reports for it.
+One Claude subscription login (Pro, Max, Team or Enterprise seat) registered with mclaude. Two logins are the same Account when both the account uuid and the organization uuid match; the same person in two organizations is two Accounts.
 _Avoid_: Profile, slot, credential, user
+
+**Account id**:
+The short opaque name mclaude mints for an Account when it is added, fixed for the Account's whole life. Names the Account dir and the Record.
+_Avoid_: Slug, handle, key
+
+**Alias**:
+The human label for an Account, shown by `list` and accepted wherever an Account id is. Defaults to the Account's email and can be renamed at any time.
+_Avoid_: Name, label, nickname
+
+**Record**:
+What mclaude remembers about one Account: its identity, its alias, the last usage reading and the last Limit it reported. An Account exists once its Record exists.
+_Avoid_: State entry, profile, cache
+
+**Orphan**:
+An Account dir with no Record, left when adding an Account did not reach a completed login. Not an Account; `list` points it out so it can be removed.
+_Avoid_: Pending account, half-added
 
 **Account dir**:
 The private directory mclaude gives an Account, passed to Claude Code as its config dir so login state stays separate from every other Account.
