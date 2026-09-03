@@ -75,7 +75,7 @@ The model a Session start will run under, as far as mclaude can tell from the ar
 _Avoid_: Target model, default model
 
 **Handoff**:
-Relaunching Claude Code on another Account with the same conversation resumed and the original arguments intact, after a Limit.
+Ending Claude Code after a Limit and relaunching it on another Account with the same conversation resumed, the original arguments intact, and the turn the Limit rejected sent again so the work carries on without the user.
 _Avoid_: Switch, swap, failover, migration
 
 **Exhausted**:
