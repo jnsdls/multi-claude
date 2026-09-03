@@ -94,12 +94,20 @@ The state of an Account whose Headroom cannot currently be read (endpoint thrott
 _Avoid_: Stale, unavailable, failed
 
 **Passthrough**:
-Any invocation mclaude forwards to Claude Code unchanged apart from choosing the Account and appending a session id. Everything whose first word is not a Reserved word.
+Any invocation mclaude forwards to Claude Code unchanged apart from choosing the Account and appending a session id and the Limit hook. Everything whose first word is not a Reserved word.
 _Avoid_: Proxy, wrapper mode
 
 **Reserved word**:
-A first argument mclaude keeps for itself instead of forwarding: `account`, which holds the management commands, and `version`. A bare `--` forces Passthrough of whatever follows.
+A first argument mclaude keeps for itself instead of forwarding: `account`, which holds the management commands, `version`, and `hook`, which is what the Limit hook runs. A bare `--` forces Passthrough of whatever follows.
 _Avoid_: Subcommand, namespace
+
+**Limit hook**:
+The two hook entries mclaude hands Claude Code at every Session start, one for a rejected turn and one for a new session id, and the command they run. Lives only for that launch; nothing is installed.
+_Avoid_: Hook script, watcher, rate-limit hook
+
+**Signal**:
+One file the Limit hook drops for mclaude, holding the hook's payload plus the Account id and the time it arrived. Kept in a directory named by the session id and deleted with it when the launch ends.
+_Avoid_: Event file, marker, drop, notification
 
 **Session start**:
 A Passthrough that opens or resumes a conversation, so it spends tokens and runs Selection. Every other Passthrough runs on the Active account with no usage reading.
