@@ -24,7 +24,7 @@ How much of a Window has been used, as a percentage.
 _Avoid_: Usage, consumption
 
 **Headroom**:
-What is left in the Window that matters for a launch: the tightest of the Windows that apply to the requested model.
+What is left in the Window that matters for a launch: the tightest of the Windows that apply to the requested model. Credits never count as Headroom.
 _Avoid_: Remaining, budget, credits
 
 **Limit**:
@@ -47,7 +47,15 @@ Relaunching Claude Code on another Account with the same conversation resumed an
 _Avoid_: Switch, swap, failover, migration
 
 **Exhausted**:
-The state where no Account has Headroom for the requested model.
+The state where no Account has Headroom for the requested model. An Account has no Headroom only when the tightest Window reads full or it reported a Limit in that Window; a Selection threshold never makes an Account Exhausted.
+
+**Credits**:
+Anthropic's pay-as-you-go extra usage enabled on an Account, spent once its Windows are full. Never Headroom; the second tier of Fallback.
+_Avoid_: Overage, extra usage, budget
+
+**Fallback**:
+The Account launched when Exhausted: an Unknown Account first, then one with Credits and its spend limit not reached, then the one whose tightest Window resets soonest. A Fallback Account is never sticky.
+_Avoid_: Least-bad, last resort, degraded
 
 **Unknown**:
 The state of an Account whose Headroom cannot currently be read (endpoint throttled, hollow response, token unreadable). Distinct from Exhausted: an Unknown Account may still be tried.
