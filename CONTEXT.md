@@ -113,6 +113,10 @@ _Avoid_: Hook script, watcher, rate-limit hook
 One file the Limit hook drops for mclaude, holding the hook's payload plus the Account id and the time it arrived. Kept in a directory named by the session id and deleted with it when the launch ends.
 _Avoid_: Event file, marker, drop, notification
 
+**Refresh trigger**:
+The launch of Claude Code mclaude makes inside an Account dir for one purpose: to have Claude Code renew an access token about to expire and store the result. Never a model request, never a Session start.
+_Avoid_: Refresh, re-auth, token bump, warm-up
+
 **Session start**:
 A Passthrough that opens or resumes a conversation, so it spends tokens and runs Selection. Every other Passthrough runs on the Active account with no usage reading.
 _Avoid_: Launch (that is mclaude's own act), interactive
