@@ -1,0 +1,111 @@
+#!/Users/jnsdls/.bun/bin/bun
+// PROTOTYPE, throwaway. mclaude stand-in for an SDK host: the host execs this
+// file as its Claude binary with stream-json on both pipes. Launch claude under
+// Account a; on a StopFailure Signal kill it, relaunch `--resume` under Account b
+// and push the rejected turn into the new child's stdin.
+//   PROTO_STDIN=pipe  mclaude pipes stdin through from the start (sees initialize)
+//   PROTO_STDIN=late  child 1 inherits stdin; only child 2 gets a pipe
+//   PROTO_REPLAY_INIT=1  in pipe mode, replay the host's initialize request to child 2
+//   PROTO_RESEND=0  relaunch idle, no resend
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, statSync, appendFileSync, rmSync } from "node:fs";
+const P = "/tmp/mclaude-proto";
+const MODE = process.env.PROTO_STDIN ?? "pipe";
+const REPLAY_INIT = process.env.PROTO_REPLAY_INIT === "1";
+const RESEND = process.env.PROTO_RESEND !== "0";
+const KILL = process.env.PROTO_KILL ?? "SIGTERM";
+const log = (s: string) => appendFileSync(`${P}/sdk-wrapper.log`, `${new Date().toISOString()} ${s}\n`);
+let args = process.argv.slice(2);
+log(`argv ${JSON.stringify(args)} mode=${MODE} replayInit=${REPLAY_INIT} resend=${RESEND}`);
+// session id: the SDK passes --session-id=<id> or --resume=<id>
+const pick = (re: RegExp) => { const i = args.findIndex((a) => re.test(a)); return i < 0 ? undefined : (args[i].includes("=") ? args[i].split("=")[1] : args[i + 1]); };
+const sid = pick(/^--session-id/) ?? pick(/^--resume/);
+if (!sid) { log("no session id, plain passthrough not prototyped"); process.exit(64); }
+const limitDir = `${P}/limits/${sid}`;
+mkdirSync(limitDir, { recursive: true });
+// merge the host's own --settings (inline JSON) with the Limit hook, drop the host flag
+let hostSettings: any = {};
+const si = args.findIndex((a) => a === "--settings" || a.startsWith("--settings="));
+if (si >= 0) { const v = args[si].includes("=") ? args[si].slice(11) : args[si + 1]; try { hostSettings = JSON.parse(v); } catch { hostSettings = {}; log(`host --settings not JSON: ${v}`); } args.splice(si, args[si].includes("=") ? 1 : 2); }
+const hookCmd = `${process.env.HOME}/.bun/bin/bun ${import.meta.dir}/hook.ts`;
+const merged = { ...hostSettings, hooks: { ...(hostSettings.hooks ?? {}),
+  StopFailure: [...(hostSettings.hooks?.StopFailure ?? []), { matcher: "rate_limit", hooks: [{ type: "command", command: hookCmd }] }],
+  SessionStart: [...(hostSettings.hooks?.SessionStart ?? []), { hooks: [{ type: "command", command: hookCmd }] }] } };
+writeFileSync(`${limitDir}/settings.json`, JSON.stringify(merged));
+log(`host settings merged: ${JSON.stringify(hostSettings)}`);
+args = [...args, "--settings", `${limitDir}/settings.json`];
+const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(CLAUDE_CONFIG_DIR|CLAUDE_SECURESTORAGE|CLAUDE_CODE_CHILD|ANTHROPIC)/.test(k)));
+function spawn(account: string, argv: string[], stdin: "inherit" | "pipe") {
+  log(`spawn account=${account} stdin=${stdin} argv=${JSON.stringify(argv)}`);
+  return Bun.spawn(["claude", ...argv], { cwd: process.cwd(), stdio: [stdin, "inherit", "inherit"],
+    env: { ...cleanEnv, CLAUDE_CONFIG_DIR: `${P}/accounts/${account}`, CLAUDE_SECURESTORAGE_CONFIG_DIR: "",
+      ANTHROPIC_BASE_URL: account === "a" ? "http://127.0.0.1:8788" : "http://127.0.0.1:8789", MCLAUDE_LIMIT_DIR: limitDir, MCLAUDE_ACCOUNT: account } });
+}
+let child = spawn("a", args, MODE === "pipe" ? "pipe" : "inherit");
+let target: Bun.Subprocess | undefined = MODE === "pipe" ? child : undefined;
+let initLine: string | undefined, lastUserLine: string | undefined, stdinClosed = false;
+const queued: string[] = [];
+const writeLine = (c: Bun.Subprocess, line: string) => { (c.stdin as any).write(line + "\n"); (c.stdin as any).flush?.(); };
+async function pump() {
+  let buf = "";
+  for await (const chunk of Bun.stdin.stream()) {
+    buf += Buffer.from(chunk).toString();
+    let nl;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+      if (!line.trim()) continue;
+      let j: any = {}; try { j = JSON.parse(line); } catch {}
+      if (j.type === "control_request" && j.request?.subtype === "initialize") initLine = line;
+      if (j.type === "user") lastUserLine = line;
+      log(`stdin -> child: ${line.slice(0, 160)}`);
+      if (target) writeLine(target, line); else { queued.push(line); log("  (queued, swap in progress)"); }
+    }
+  }
+  stdinClosed = true; log("host closed stdin"); if (target) (target.stdin as any).end();
+}
+if (MODE === "pipe") pump();
+const seen = new Set<string>();
+let handedOff = false;
+const poll = setInterval(async () => {
+  for (const f of readdirSync(limitDir)) {
+    if (!f.endsWith(".json") || f === "settings.json" || seen.has(f)) continue;
+    seen.add(f);
+    const sig = JSON.parse(readFileSync(`${limitDir}/${f}`, "utf8"));
+    log(`signal ${f} account=${sig.accountId} error=${sig.payload.error} agent=${sig.payload.agent_id ?? "-"}`);
+    if (!f.startsWith("StopFailure") || handedOff) continue;
+    handedOff = true; clearInterval(poll);
+    const t0 = Date.now();
+    const tp = sig.payload.transcript_path;
+    let last = -1, stable = 0;
+    while (Date.now() - t0 < 3000) { const m = existsSync(tp) ? statSync(tp).mtimeMs : -2; if (m === last) { if (++stable >= 3) break; } else { stable = 0; last = m; } await Bun.sleep(100); }
+    log(`transcript settled after ${Date.now() - t0}ms`);
+    target = undefined;
+    child.kill(KILL as any);
+    const code = await child.exited;
+    log(`child exited code=${code} signal=${child.signalCode}`);
+    // decide what to resend from the transcript, as in the TUI prototype
+    const lines = readFileSync(tp, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    const asText = (c: any) => typeof c === "string" ? c : Array.isArray(c) && c.every((b) => b.type === "text") ? c.map((b) => b.text).join("") : undefined;
+    const lastEntry = [...lines].reverse().find((e) => e.type === "user" || e.type === "assistant");
+    const prev = lines[lines.indexOf(lastEntry) - 1];
+    const errorAfterText = lastEntry?.isApiErrorMessage && prev?.type === "user" && asText(prev.message?.content) !== undefined;
+    const resendLine = errorAfterText
+      ? (lastUserLine ?? JSON.stringify({ type: "user", message: { role: "user", content: asText(prev.message.content) } }))
+      : JSON.stringify({ type: "user", message: { role: "user", content: "Continue where you left off. The previous attempt stopped at a usage limit." } });
+    const argv2 = args.map((a) => a.startsWith("--session-id=") ? `--resume=${sid}` : a);
+    if (!argv2.some((a) => a.startsWith("--resume"))) { const i = argv2.indexOf("--session-id"); if (i >= 0) argv2.splice(i, 2, `--resume=${sid}`); }
+    child = spawn("b", argv2, "pipe");
+    target = child;
+    if (MODE === "late") pump();
+    if (REPLAY_INIT && initLine) { writeLine(child, initLine); log(`replayed initialize`); }
+    if (RESEND) { writeLine(child, resendLine); log(`resent (errorAfterText=${errorAfterText}): ${resendLine.slice(0, 160)}`); }
+    for (const l of queued.splice(0)) { writeLine(child, l); log(`flushed queued: ${l.slice(0, 120)}`); }
+    if (stdinClosed) (child.stdin as any).end();
+    log(`relaunched ${Date.now() - t0}ms after signal`);
+    const c2 = await child.exited;
+    log(`second child exited code=${c2}`);
+    rmSync(limitDir, { recursive: true, force: true });
+    process.exit(c2 ?? 0);
+  }
+}, 100);
+child.exited.then((code) => { if (!handedOff) { log(`child exited on its own code=${code}`); clearInterval(poll); rmSync(limitDir, { recursive: true, force: true }); process.exit(code ?? 0); } });
+for (const s of ["SIGTERM", "SIGHUP"] as const) process.on(s, () => { log(`got ${s}, forwarding`); child.kill(s); });
