@@ -1,0 +1,10 @@
+sleep 7
+trigger sub
+send Use the Task tool to launch one Explore subagent whose only job is to reply with the word pong. Then reply done.
+enter
+wait hit your session limit 60
+mark limit-seen
+sleep 10
+termios
+screen 2500
+quit

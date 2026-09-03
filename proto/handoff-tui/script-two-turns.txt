@@ -1,0 +1,17 @@
+wait \? for shortcuts 30
+send say hello in three words
+enter
+sleep 7
+screen 600
+termios
+trigger five_hour
+send say goodbye in three words
+enter
+wait hit your session limit 40
+mark limit-seen
+wait Claude Code v2.1.259 30
+wait \? for shortcuts 30
+sleep 6
+termios
+screen 1500
+quit

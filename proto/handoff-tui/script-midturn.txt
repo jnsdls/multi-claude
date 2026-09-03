@@ -1,0 +1,10 @@
+sleep 7
+trigger msgs:3
+send Run echo one with the Bash tool, then run echo two with the Bash tool, then reply done.
+sleep 1
+enter
+wait hit your session limit 60
+mark limit-seen
+sleep 12
+screen 2500
+quit
