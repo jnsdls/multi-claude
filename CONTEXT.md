@@ -24,6 +24,14 @@ _Avoid_: State entry, profile, cache
 An Account dir with no Record, left when adding an Account did not reach a completed login. Not an Account; `list` points it out so it can be removed.
 _Avoid_: Pending account, half-added
 
+**Needs login**:
+The state of an Account whose stored credential is gone or dead, so no launch on it can succeed until a person signs in again inside its Account dir. Shown by `list`; the Account and its Record stay.
+_Avoid_: Expired, logged out, broken
+
+**Run marker**:
+The note a launch leaves inside the Account dir for as long as Claude Code runs there, so `remove` can tell the Account is in use.
+_Avoid_: Pidfile, lock, lease
+
 **Account dir**:
 The private directory mclaude gives an Account, passed to Claude Code as its config dir so login state stays separate from every other Account.
 _Avoid_: Profile dir, config dir (that is Claude Code's name for the mechanism, not ours)
