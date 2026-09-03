@@ -78,4 +78,13 @@ The state of an Account whose Headroom cannot currently be read (endpoint thrott
 _Avoid_: Stale, unavailable, failed
 
 **Passthrough**:
-Any invocation mclaude forwards to Claude Code unchanged apart from choosing the Account. Everything that is not one of mclaude's own management commands.
+Any invocation mclaude forwards to Claude Code unchanged apart from choosing the Account and appending a session id. Everything whose first word is not a Reserved word.
+_Avoid_: Proxy, wrapper mode
+
+**Reserved word**:
+A first argument mclaude keeps for itself instead of forwarding: `account`, which holds the management commands, and `version`. A bare `--` forces Passthrough of whatever follows.
+_Avoid_: Subcommand, namespace
+
+**Session start**:
+A Passthrough that opens or resumes a conversation, so it spends tokens and runs Selection. Every other Passthrough runs on the Active account with no usage reading.
+_Avoid_: Launch (that is mclaude's own act), interactive
