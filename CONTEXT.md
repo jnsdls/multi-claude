@@ -49,5 +49,9 @@ _Avoid_: Switch, swap, failover, migration
 **Exhausted**:
 The state where no Account has Headroom for the requested model.
 
+**Unknown**:
+The state of an Account whose Headroom cannot currently be read (endpoint throttled, hollow response, token unreadable). Distinct from Exhausted: an Unknown Account may still be tried.
+_Avoid_: Stale, unavailable, failed
+
 **Passthrough**:
 Any invocation mclaude forwards to Claude Code unchanged apart from choosing the Account. Everything that is not one of mclaude's own management commands.
