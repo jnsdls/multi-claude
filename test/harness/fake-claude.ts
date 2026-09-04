@@ -114,8 +114,26 @@ if (argv[0] === "auth") {
     save({ kind: "auth logout" });
     process.exit(logout.exit ?? 0);
   }
+  // auth status: loggedIn from the credential file, identity from the dir's .claude.json.
   save({ kind: "auth status" });
-  process.stdout.write(`${JSON.stringify({ loggedIn: true })}\n`);
+  if (!configDir || !existsSync(join(configDir, ".credentials.json"))) {
+    process.stdout.write(`${JSON.stringify({ loggedIn: false })}\n`);
+    process.exit(1);
+  }
+  let cj: Record<string, any> = {};
+  try {
+    cj = JSON.parse(readFileSync(join(configDir, ".claude.json"), "utf8"));
+  } catch {}
+  const login = scenario.login ?? {};
+  process.stdout.write(
+    `${JSON.stringify({
+      loggedIn: true,
+      authMethod: login.authMethod ?? "claude.ai",
+      email: cj.oauthAccount?.emailAddress ?? null,
+      orgName: cj.oauthAccount?.organizationName ?? null,
+      subscriptionType: login.subscriptionType ?? "max",
+    })}\n`,
+  );
   process.exit(0);
 }
 

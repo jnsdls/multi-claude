@@ -20,6 +20,7 @@ export interface Scenario {
     stdout?: string;
     oauthAccount?: Record<string, unknown> | null;
     authMethod?: string | null;
+    subscriptionType?: string;
     credential?: Record<string, unknown> | null;
     extraClaudeJson?: Record<string, unknown>;
   };

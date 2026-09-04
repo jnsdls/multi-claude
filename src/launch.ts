@@ -10,6 +10,7 @@ import { buildChildEnv } from "./env.ts";
 import { EXIT, ExitError } from "./exit.ts";
 import { warn } from "./log.ts";
 import { accountDir } from "./paths.ts";
+import { syncPreferences } from "./prefs.ts";
 import { readActiveId, readRecord, writeActiveId, type AccountRecord } from "./record.ts";
 import { writeRunMarker } from "./runmarker.ts";
 import { exitLike, forwardSignals, runCaptured, spawnClaude } from "./spawn.ts";
@@ -146,6 +147,7 @@ export async function spawnOn(
     throw new ExitError(EXIT.REFUSED, `Account dir for ${chosen.record.alias} (${chosen.record.id}) is missing`);
   }
   runSymlinkFarm(chosen.dir);
+  await syncPreferences(chosen.dir);
   if (chosen.makeActive) writeActiveId(chosen.record.id);
   const env = buildChildEnv({ accountDir: chosen.dir, accountId: chosen.record.id, limitDir: opts.limitDir });
   const releaseMarker = writeRunMarker(chosen.dir);
