@@ -8,10 +8,11 @@ import { warn } from "../../log.ts";
 import { accountDir } from "../../paths.ts";
 import { listOrphans, listRecords, readActiveId, readPinnedId, type AccountRecord, type Window } from "../../record.ts";
 import { describeOutcome, pollMany } from "../../usage.ts";
+import { liveLimit } from "../../limit.ts";
 import { isFresh, isUnknown, LIST_CONCURRENCY, LIST_TIMEOUT_MS } from "../../windows.ts";
 import { claudeWithoutConfig } from "./common.ts";
 
-export type AccountState = "ok" | "needs login" | "orphan" | "disabled" | "unknown" | `limit ${string}`;
+export type AccountState = "ok" | "needs login" | "orphan" | "disabled" | "unknown" | "limit" | `limit ${string}`;
 
 export const COLUMNS = ["", "ALIAS", "ID", "PLAN", "SESSION", "WEEK", "MODEL WINDOWS", "AGE", "STATE"] as const;
 
@@ -61,10 +62,12 @@ export function orphanRow(id: string): string[] {
   return ["", "-", id, "-", "-", "-", "-", "-", "orphan"];
 }
 
-/** Needs login wins, then disabled, then unknown. `limit <window>` lands with #57. */
+/** Needs login wins, then disabled, then a live Limit (`limit <window>`, or `limit` while unnamed), then unknown. */
 export function stateOf(record: AccountRecord, loggedOut: boolean, now: number = Date.now()): AccountState {
   if (loggedOut) return "needs login";
   if (record.disabled) return "disabled";
+  const limit = liveLimit(record, null, now);
+  if (limit) return limit.window ? `limit ${limit.window}` : "limit";
   if (isUnknown(record, now)) return "unknown";
   return "ok";
 }

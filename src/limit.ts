@@ -1,8 +1,11 @@
-// Pure rules over the last Limit an Account reported: which launches it bars
-// (scope), how long it is believed (trust), and what evidence clears it early.
-// Nothing here writes a Limit; the Signal path does that.
-import type { AccountRecord, LastLimit } from "./record.ts";
-import { evidentWindows, isUnknown, type NamedWindow } from "./windows.ts";
+// The last Limit an Account reported: the pure rules over it (which launches it
+// bars, how long it is believed, what evidence clears it early) and the write
+// path from a Signal to the Record, with the one usage request that names the
+// Window (ADR 0007).
+import type { Signal } from "./hook.ts";
+import { readRecord, updateRecord, type AccountRecord, type LastLimit } from "./record.ts";
+import { pollAccount } from "./usage.ts";
+import { evidentWindows, isUnknown, LAUNCH_TIMEOUT_MS, tightestWindow, type NamedWindow } from "./windows.ts";
 
 /** With no Reset to go by, a Limit is believed this long after it was reported. */
 export const LIMIT_DEFAULT_TRUST_MS = 5 * 3600_000;
@@ -42,8 +45,12 @@ export function limitTrustedUntil(record: Pick<AccountRecord, "usage">, limit: L
   return Number.isNaN(earliest) ? reported + LIMIT_DEFAULT_TRUST_MS : earliest;
 }
 
+function sameName(a: string, b: string): boolean {
+  return a === b || a.toLowerCase() === b.toLowerCase();
+}
+
 function sameWindow(w: NamedWindow, name: string): boolean {
-  return w.name === name || w.name.toLowerCase() === name.toLowerCase();
+  return sameName(w.name, name);
 }
 
 /**
@@ -93,4 +100,90 @@ export function limitLeavesUnknown(record: Pick<AccountRecord, "usage" | "lastLi
 /** Unknown for Selection: no Reading to decide on, or a Limit whose trust ended without evidence either way. */
 export function accountIsUnknownForSelection(record: Pick<AccountRecord, "usage" | "lastLimit">, model: string | null, now: number): boolean {
   return isUnknown(record, now) || limitLeavesUnknown(record, model, now);
+}
+
+/**
+ * The Window a wall text names, as a best effort: `session limit` is
+ * `five_hour`, `weekly limit` is `seven_day`, and `<Name> limit` with a
+ * capitalised name (Opus, Sonnet, Fable) is that scoped display name. Anything
+ * else (`usage limit`, `monthly spend limit`, no text) is null and the poll
+ * names the Window instead.
+ */
+export function windowFromWallText(text: string | undefined): string | null {
+  if (!text) return null;
+  const m = /\byour (session|weekly|[A-Z][A-Za-z0-9.-]*) limit\b/.exec(text);
+  if (!m) return null;
+  if (m[1] === "session") return "five_hour";
+  if (m[1] === "weekly") return "seven_day";
+  return m[1]!;
+}
+
+/**
+ * The Limit a `StopFailure` Signal reports. Pure. `reportedAt` is when the hook
+ * received it, the session id comes from the payload (or the tracked one when
+ * the payload lacks it), and the Window is read off the wall text when it can
+ * be. The Reset is never in the payload.
+ */
+export function limitFromSignal(payload: Record<string, unknown>, receivedAt: string, fallbackSessionId = ""): LastLimit {
+  const sessionId = typeof payload.session_id === "string" ? payload.session_id : fallbackSessionId;
+  const text = typeof payload.last_assistant_message === "string" ? payload.last_assistant_message : undefined;
+  return { reportedAt: receivedAt, sessionId, window: windowFromWallText(text), resetsAt: null };
+}
+
+/**
+ * The Window a Reading blames for a Limit: the one the wall text named when the
+ * Reading carries it, else the Window reading 100, else the highest. Null with
+ * no evident Window.
+ */
+export function windowBlamed(record: Pick<AccountRecord, "usage">, named: string | null): NamedWindow | null {
+  const windows = evidentWindows(record.usage.lastGood);
+  if (named !== null) {
+    const match = windows.find((w) => sameWindow(w, named));
+    if (match) return match;
+  }
+  return windows.find((w) => w.utilization >= 100) ?? tightestWindow(windows);
+}
+
+function fetchedAfter(record: Pick<AccountRecord, "usage">, iso: string): boolean {
+  const fetched = parse(record.usage.fetchedAt);
+  return !Number.isNaN(fetched) && fetched > parse(iso);
+}
+
+/**
+ * Writes the Limit a Signal reports to the Account's Record, then makes one
+ * usage request to name the Window and its Reset. The request is skipped when a
+ * Reading fetched after the report already exists, or when the Record holds a
+ * live Limit in the same Window that a later Reading already confirmed; its
+ * Window and Reset then carry over. Several sessions on one Account hit the
+ * wall within seconds, and the first one's request serves them all (ADR 0007).
+ * Null when the Record is gone.
+ */
+export async function recordLimit(
+  accountId: string,
+  signal: Signal,
+  opts: { now?: number; claudePath?: string | null; fallbackSessionId?: string } = {},
+): Promise<AccountRecord | null> {
+  const now = opts.now ?? Date.now();
+  const current = readRecord(accountId);
+  if (!current) return null;
+  const reported = limitFromSignal(signal.payload, signal.receivedAt, opts.fallbackSessionId);
+  const prior = liveLimit(current, null, now);
+  const confirmed = prior && fetchedAfter(current, prior.reportedAt) ? prior : null;
+  const carried: LastLimit =
+    confirmed && (reported.window === null || (confirmed.window !== null && sameName(confirmed.window, reported.window)))
+      ? { ...reported, window: confirmed.window, resetsAt: confirmed.resetsAt }
+      : reported;
+  let record = updateRecord(accountId, (latest) => ({ ...(latest ?? current), lastLimit: carried }));
+  if (carried !== reported || fetchedAfter(record, reported.reportedAt)) return record;
+
+  const result = await pollAccount(record, { timeoutMs: LAUNCH_TIMEOUT_MS, claudePath: opts.claudePath, now });
+  if (result.outcome?.kind !== "ok") return result.record;
+  const blamed = windowBlamed(result.record, carried.window);
+  if (!blamed) return result.record;
+  record = updateRecord(accountId, (latest) => {
+    const rec = latest ?? result.record;
+    const limit = rec.lastLimit ?? carried;
+    return { ...rec, lastLimit: { ...limit, window: blamed.name, resetsAt: blamed.resetsAt } };
+  });
+  return record;
 }

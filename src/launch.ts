@@ -3,20 +3,23 @@
 // mirrors its exit. Session starts additionally run Selection and carry the Limit
 // hook; the pieces those need plug in here.
 import { existsSync } from "node:fs";
+import type { Subprocess } from "bun";
 import { classify, isStreamJsonInput, scanArgv, stripOwnFlags, type OwnFlags, type Scan } from "./argv.ts";
 import { resolveClaude } from "./claude-path.ts";
 import { loadConfigFile, resolveSettings, type Settings } from "./config.ts";
 import { buildChildEnv } from "./env.ts";
 import { EXIT, ExitError } from "./exit.ts";
+import type { Signal } from "./hook.ts";
 import { warn } from "./log.ts";
 import { accountDir } from "./paths.ts";
 import { syncPreferences } from "./prefs.ts";
-import { liveLimit } from "./limit.ts";
+import { liveLimit, recordLimit } from "./limit.ts";
 import { resolveRequestedModel } from "./model.ts";
 import { listRecords, readActiveId, readRecord, writeActiveId, type AccountRecord } from "./record.ts";
 import { writeRunMarker } from "./runmarker.ts";
 import { exitLike, forwardSignals, runCaptured, spawnClaude } from "./spawn.ts";
 import { earliestWall, fallback, refreshOrder, select, type Selection } from "./selection.ts";
+import { cleanupSignalDir, injectSessionArgv, prepareSession, sessionIdFor, watchSignals, type SessionPlan } from "./signal.ts";
 import { runSymlinkFarm } from "./symlink-farm.ts";
 import { pollAccount, pollMany } from "./usage.ts";
 import { compareVersions, parseVersion, VERSION, VERSION_FLOOR } from "./version.ts";
@@ -110,9 +113,10 @@ export function requireActiveAccount(): Chosen {
 }
 
 /** Maintenance commands run on the Active account with no poll and no Version floor check. */
-async function runPlainPassthrough(ctx: LaunchContext): Promise<number> {
+async function runPlainPassthrough(ctx: LaunchContext): Promise<never> {
   const chosen = chooseForPlainPassthrough(ctx);
-  return spawnOn(ctx, chosen, ctx.forwarded, { limitDir: undefined });
+  const child = await spawnOn(ctx, chosen, ctx.forwarded, { limitDir: undefined });
+  exitLike(child);
 }
 
 /** Override, then Pin, then the Active account. Selection never runs here. */
@@ -120,14 +124,61 @@ function chooseForPlainPassthrough(_ctx: LaunchContext): Chosen {
   return requireActiveAccount();
 }
 
-async function runSessionStart(ctx: LaunchContext): Promise<number> {
+/**
+ * A Session start: the Version floor, Selection, then the Limit hook plumbing
+ * around the spawn. The watcher starts before the child and stops after it;
+ * the Signal dir dies with the launch, after any Limit still being recorded
+ * has landed.
+ */
+async function runSessionStart(ctx: LaunchContext): Promise<never> {
   await checkVersionFloor(ctx);
   const chosen = await chooseForSessionStart(ctx);
   if (ctx.scan.bare || ctx.scan.safeMode) {
     warn(`${ctx.scan.bare ? "--bare" : "--safe-mode"} skips hooks, so Handoff is off for this launch`);
   }
-  return spawnOn(ctx, chosen, ctx.forwarded, { limitDir: undefined });
+  const plan = prepareSession(ctx.scan, sessionIdFor(ctx.scan));
+  const injected = injectSessionArgv(ctx.forwarded, ctx.scan, plan.sessionId, plan.settingsPath, plan.userSettingsUnparseable);
+  if (injected.warning) warn(injected.warning);
+
+  const live: LiveSession = { ctx, chosen, plan, sessionId: plan.sessionId, child: null };
+  const watcher = watchSignals(plan.limitDir, {
+    onSessionStart(signal) {
+      const id = signal.payload.session_id;
+      if (typeof id === "string" && id) live.sessionId = id;
+    },
+    async onLimit(signal) {
+      const record = await recordLimit(chosen.record.id, signal, { claudePath: ctx.claudePath, fallbackSessionId: live.sessionId });
+      if (record) await onLimitRecorded(signal, record, live);
+    },
+  });
+  let child: Subprocess;
+  try {
+    child = await spawnOn(ctx, chosen, injected.argv, { limitDir: plan.limitDir, onSpawn: (c) => (live.child = c) });
+  } finally {
+    await watcher.stop();
+    cleanupSignalDir(plan.limitDir);
+  }
+  exitLike(child);
 }
+
+/** What a running Session start knows about itself; the Handoff seam reads it. */
+export interface LiveSession {
+  ctx: LaunchContext;
+  chosen: Chosen;
+  plan: SessionPlan;
+  /** The session id claude runs under, updated by every SessionStart Signal (so `/clear` keeps Handoff armed). */
+  sessionId: string;
+  /** The claude child, once spawned. */
+  child: Subprocess | null;
+}
+
+/**
+ * The Handoff seam (#58). Runs after a Limit Signal has been written to the
+ * Record and the one usage request has named the Window. Handoff will run
+ * Selection here (ADR 0007), end `live.child`, and relaunch through `spawnOn`
+ * with `--resume live.sessionId` and the same `plan.limitDir`. Until then: nothing.
+ */
+async function onLimitRecorded(_signal: Signal, _record: AccountRecord, _live: LiveSession): Promise<void> {}
 
 /** Override, then Pin, then Selection. */
 async function chooseForSessionStart(ctx: LaunchContext): Promise<Chosen> {
@@ -238,13 +289,16 @@ export async function checkVersionFloor(ctx: LaunchContext): Promise<void> {
   }
 }
 
-/** Spawns claude on the chosen Account with inherited stdio and mirrors its exit. */
+/**
+ * Spawns claude on the chosen Account with inherited stdio and resolves with
+ * the exited child, so the caller can clean up before mirroring its exit.
+ */
 export async function spawnOn(
   ctx: LaunchContext,
   chosen: Chosen,
   argv: string[],
-  opts: { limitDir: string | undefined; cwd?: string },
-): Promise<never> {
+  opts: { limitDir: string | undefined; cwd?: string; onSpawn?: (child: Subprocess) => void },
+): Promise<Subprocess> {
   if (!existsSync(chosen.dir)) {
     throw new ExitError(EXIT.REFUSED, `Account dir for ${chosen.record.alias} (${chosen.record.id}) is missing`);
   }
@@ -259,6 +313,7 @@ export async function spawnOn(
     cwd: opts.cwd,
     stdin: isStreamJsonInput(ctx.scan) ? "inherit" : "inherit",
   });
+  opts.onSpawn?.(child);
   const stopForwarding = forwardSignals(() => child);
   try {
     await child.exited;
@@ -266,5 +321,5 @@ export async function spawnOn(
     stopForwarding();
     releaseMarker();
   }
-  exitLike(child);
+  return child;
 }

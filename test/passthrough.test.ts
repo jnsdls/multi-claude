@@ -17,8 +17,10 @@ describe("passthrough", () => {
     const r = await h.run(["-p", "--model", "opus", "say --hi", "--", "--weird"]);
     expect(r.exitCode).toBe(0);
     const [call] = h.launches();
-    expect(call!.argv.slice(0, 5)).toEqual(["-p", "--model", "opus", "say --hi", "--"]);
-    expect(call!.argv[5]).toBe("--weird");
+    // A Session start gains --session-id and --settings ahead of the bare --, so claude reads them as flags.
+    expect(call!.argv.slice(0, 4)).toEqual(["-p", "--model", "opus", "say --hi"]);
+    expect(call!.argv.slice(-2)).toEqual(["--", "--weird"]);
+    expect(call!.argv.slice(4, -2).filter((_, i) => i % 2 === 0)).toEqual(["--session-id", "--settings"]);
     expect(call!.env.CLAUDE_CONFIG_DIR).toBe(h.accountDir(id));
     expect(call!.env.CLAUDE_SECURESTORAGE_CONFIG_DIR).toBe(h.accountDir(id));
     expect(call!.env.MCLAUDE_ACCOUNT).toBe(id);
@@ -28,7 +30,7 @@ describe("passthrough", () => {
     h.plantAccount({ active: true });
     const r = await h.run(["--", "account", "list", "--account", "x"]);
     expect(r.exitCode).toBe(0);
-    expect(h.launches()[0]!.argv).toEqual(["account", "list", "--account", "x"]);
+    expect(h.launches()[0]!.argv.slice(0, 4)).toEqual(["account", "list", "--account", "x"]);
   });
 
   test("own flags are stripped wherever they appear before --", async () => {

@@ -291,7 +291,7 @@ describe("the Requested model steers the applicable Windows", () => {
   });
   test("the child's argv is never rewritten to find Headroom", async () => {
     await h.run(["-p", "hi", "--model", "opus"]);
-    expect(h.launches()[0]!.argv).toEqual(["-p", "hi", "--model", "opus"]);
+    expect(h.launches()[0]!.argv.slice(0, 4)).toEqual(["-p", "hi", "--model", "opus"]);
   });
 });
 
