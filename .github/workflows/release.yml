@@ -1,0 +1,62 @@
+# On a v* tag: build, test, cross-compile the four binaries from one macOS
+# runner, attach them to a GitHub release with SHASUMS256.txt, publish to npm.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Check that package.json matches the tag
+        run: |
+          version="$(bun -p 'require("./package.json").version')"
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "package.json is $version, tag is $GITHUB_REF_NAME"; exit 1; }
+
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: bun test
+
+      # scripts/build.ts ad-hoc signs the darwin outputs (codesign --sign -).
+      - run: bun run build:binaries
+
+      - name: Tar each binary and write SHASUMS256.txt
+        run: |
+          cd out
+          for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
+            mkdir "stage-$t"
+            cp "mclaude-$t" "stage-$t/mclaude"
+            chmod 755 "stage-$t/mclaude"
+            tar -C "stage-$t" -czf "mclaude-$t.tar.gz" mclaude
+            rm -r "stage-$t"
+          done
+          shasum -a 256 mclaude-*.tar.gz > SHASUMS256.txt
+          cat SHASUMS256.txt
+
+      - name: Create the GitHub release
+        run: gh release create "$GITHUB_REF_NAME" out/*.tar.gz out/SHASUMS256.txt --generate-notes
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

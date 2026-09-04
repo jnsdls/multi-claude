@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+      - run: bun run build
+      - run: bun test
+
+      - name: Compile the host binary
+        run: |
+          target="$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/x64/; s/aarch64/arm64/')"
+          echo "TARGET=$target" >> "$GITHUB_ENV"
+          bun run scripts/build.ts --compile --target="$target"
+
+      # Both channels answer --version with the stub's line on stdout and the
+      # package version on stderr.
+      - name: Smoke test --version against a stub claude
+        run: |
+          stub="$RUNNER_TEMP/claude"
+          printf '#!/bin/sh\necho "2.1.259 (Claude Code)"\n' > "$stub"
+          chmod +x "$stub"
+          export MCLAUDE_CLAUDE_PATH="$stub"
+          export MCLAUDE_HOME="$RUNNER_TEMP/mclaude-home"
+          version="$(bun -p 'require("./package.json").version')"
+          for exe in bin/mclaude "out/mclaude-$TARGET"; do
+            out="$("$exe" --version 2> "$RUNNER_TEMP/err")"
+            err="$(cat "$RUNNER_TEMP/err")"
+            echo "$exe: stdout=[$out] stderr=[$err]"
+            [ "$out" = "2.1.259 (Claude Code)" ] || { echo "stdout mismatch"; exit 1; }
+            case "$err" in *"$version"*) ;; *) echo "stderr lacks $version"; exit 1 ;; esac
+          done

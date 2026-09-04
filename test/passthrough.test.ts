@@ -157,6 +157,15 @@ describe("passthrough", () => {
     expect(plain.exitCode).toBe(0);
   });
 
+  test("a Session start at the floor exactly proceeds", async () => {
+    h.plantAccount({ active: true });
+    h.scenario({ version: "2.1.223 (Claude Code)" });
+    const r = await h.run(["-p", "hi"]);
+    expect(r.exitCode).toBe(0);
+    expect(r.stderr).toBe("");
+    expect(h.launches().length).toBe(1);
+  });
+
   test("unparseable version output proceeds", async () => {
     h.plantAccount({ active: true });
     h.scenario({ version: "garbage" });

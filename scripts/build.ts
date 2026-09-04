@@ -35,6 +35,8 @@ if (!compile) {
     if (only && only !== t) continue;
     const outfile = join(root, "out", `mclaude-${t}`);
     await $`bun build --compile --target=bun-${t} --define MCLAUDE_VERSION=${JSON.stringify(version)} ${entry} --outfile ${outfile}`;
+    // Ad-hoc signature: enough for a curl download, not for Gatekeeper on a browser download.
+    if (t.startsWith("darwin") && process.platform === "darwin") await $`codesign --sign - ${outfile}`;
     console.log(`built out/mclaude-${t} (${version})`);
   }
 }
