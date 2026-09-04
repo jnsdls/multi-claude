@@ -1,6 +1,6 @@
 # Implementing mclaude
 
-The launcher lives in `src/`, one TypeScript program on Bun. `scripts/build.ts` builds `dist/main.js` (what the tests run) and, with `--compile`, the four binaries plus an npm platform package for each under `npm/`. `bin/mclaude` is the npm launcher: a Node script that execs the binary from the platform package npm installed.
+The launcher lives in `src/`, one TypeScript program on Bun. `scripts/build.ts` builds `dist/main.js` (what the tests run) and, with `--compile`, the four binaries plus the five npm packages under `npm/` (`scripts/stage.ts`; the published manifests are generated, the repo's `package.json` is private). `bin/mclaude` is the npm launcher: a Node script that execs the binary from the platform package npm installed.
 
 ## Commands
 
