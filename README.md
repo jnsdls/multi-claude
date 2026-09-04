@@ -80,6 +80,14 @@ mclaude's own flags work anywhere before a bare `--` and are stripped before for
 | `--switch-threshold <n>` | Utilization above which Selection looks for another Account (0 to 100) |
 | `--on-exhausted <launch\|fail>` | When no Account has headroom: launch on the Fallback, or exit 75 |
 
+## Pin, override and disable
+
+`account pin <id|alias>` holds every launch on one Account until `account unpin`. Past the Switch threshold it launches silently. Holding a Limit it launches after one stderr line, or exits 75 under `onExhausted=fail`. A Limit hit mid-session is written to the Record and the child stays; Handoff never leaves a pinned Account. A pinned launch becomes the Active account.
+
+`--account <id|alias>` is the same order for one launch and leaves the Active account alone. `MCLAUDE_USE_ACCOUNT` does the same for a host that sets the environment but not the argv. The flag wins over the variable, and both win over a Pin. An unknown name exits 64. An Account that Needs login, or an Orphan id, exits 1 pointing at `account login` or `account remove`. Nothing falls through to Selection.
+
+`account disable <id|alias>` keeps an Account out of Selection, Fallback and Handoff. `list` still shows it and `list --refresh` still reads it. A Pin or `--account` launches a Disabled Account anyway, with one stderr line. `account enable` reverses it. All four commands exit 0 when nothing changes.
+
 A bare `--` forces Passthrough of whatever follows, so a prompt that begins with a Reserved word still reaches Claude Code:
 
 ```sh

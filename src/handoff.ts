@@ -36,14 +36,14 @@ export function chooseHandoffTarget(live: LiveSession, records: AccountRecord[],
   const current = live.chosen.record.id;
   const selection = select({ records, activeId: readActiveId(), model: live.model, threshold: live.threshold, now });
   if (selection.kind === "move" && selection.id !== current) {
-    return { chosen: { record: selection.record, dir: accountDir(selection.id), makeActive: true }, reason: null };
+    return { chosen: { record: selection.record, dir: accountDir(selection.id), makeActive: true, source: "selection" }, reason: null };
   }
   if (selection.kind !== "exhausted") return null;
   if (live.ctx.settings.onExhausted === "fail") return null;
   const fb = fallback(records, live.model, now);
   if (!fb || fb.record.id === current || fb.tier === "reset") return null;
   const reason = fb.tier === "unknown" ? "its usage is unknown" : "using extra usage credits";
-  return { chosen: { record: fb.record, dir: accountDir(fb.record.id), makeActive: false }, reason };
+  return { chosen: { record: fb.record, dir: accountDir(fb.record.id), makeActive: false, source: "fallback" }, reason };
 }
 
 /** Polls the transcript's mtime until three consecutive readings agree, capped. A missing path just proceeds. */

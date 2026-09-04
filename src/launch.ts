@@ -7,6 +7,7 @@ import type { Subprocess } from "bun";
 import { classify, isStreamJsonInput, scanArgv, stripOwnFlags, type OwnFlags, type Scan } from "./argv.ts";
 import { resolveClaude } from "./claude-path.ts";
 import { loadConfigFile, resolveSettings, type Settings } from "./config.ts";
+import { needsLogin, readCredential } from "./credential.ts";
 import { buildChildEnv } from "./env.ts";
 import { EXIT, ExitError } from "./exit.ts";
 import { runHandoff } from "./handoff.ts";
@@ -14,9 +15,9 @@ import type { Signal } from "./hook.ts";
 import { warn } from "./log.ts";
 import { accountDir } from "./paths.ts";
 import { syncPreferences } from "./prefs.ts";
-import { liveLimit, recordLimit } from "./limit.ts";
+import { limitTrustedUntil, liveLimit, recordLimit } from "./limit.ts";
 import { resolveRequestedModel } from "./model.ts";
-import { listRecords, readActiveId, readRecord, writeActiveId, type AccountRecord } from "./record.ts";
+import { listOrphans, listRecords, readActiveId, readPinnedId, readRecord, resolveAccount, writeActiveId, type AccountRecord } from "./record.ts";
 import { writeRunMarker } from "./runmarker.ts";
 import { exitLike, forwardSignals, runCaptured, spawnClaude } from "./spawn.ts";
 import { earliestWall, fallback, refreshOrder, select, type Selection } from "./selection.ts";
@@ -49,12 +50,21 @@ export interface LaunchContext {
   claudePath: string;
 }
 
+/** Who named the Account: the order of authority is override, pin, then Selection or the Active account (ADR 0011). */
+export type ChosenSource = "selection" | "active" | "pin" | "override" | "fallback";
+
 /** The Account a launch runs on. */
 export interface Chosen {
   record: AccountRecord;
   dir: string;
   /** Whether this launch writes `active`. False on a Fallback or Override launch. */
   makeActive: boolean;
+  source: ChosenSource;
+}
+
+/** A Pin or Override is absolute: no Handoff leaves the Account it named. */
+export function handoffAllowedFor(chosen: Chosen): boolean {
+  return chosen.source !== "pin" && chosen.source !== "override";
 }
 
 export async function runPassthrough(argv: string[], opts: { forced: boolean }): Promise<number> {
@@ -111,19 +121,87 @@ export function requireActiveAccount(): Chosen {
     throw new ExitError(EXIT.REFUSED, "no Active account. Run `mclaude account add` to log in to one");
   }
   const record = readRecord(id)!;
-  return { record, dir: accountDir(id), makeActive: true };
+  return { record, dir: accountDir(id), makeActive: true, source: "active" };
 }
 
 /** Maintenance commands run on the Active account with no poll and no Version floor check. */
 async function runPlainPassthrough(ctx: LaunchContext): Promise<never> {
-  const chosen = chooseForPlainPassthrough(ctx);
+  const chosen = await chooseForPlainPassthrough(ctx);
   const child = await spawnOn(ctx, chosen, ctx.forwarded, { limitDir: undefined });
   exitLike(child);
 }
 
 /** Override, then Pin, then the Active account. Selection never runs here. */
-function chooseForPlainPassthrough(_ctx: LaunchContext): Chosen {
-  return requireActiveAccount();
+async function chooseForPlainPassthrough(ctx: LaunchContext): Promise<Chosen> {
+  return (await chooseNamed(ctx, null)) ?? requireActiveAccount();
+}
+
+/** `--account` over `MCLAUDE_USE_ACCOUNT`. `MCLAUDE_ACCOUNT` is what mclaude sets on the child and is never read. */
+function overrideName(ctx: LaunchContext): string | null {
+  return ctx.own.account || process.env.MCLAUDE_USE_ACCOUNT || null;
+}
+
+/**
+ * The Account an Override or a Pin names, or null when neither is in force so
+ * the caller falls through to its own rule. Never polls: the name is the
+ * order, whatever the Record says. A pinned id with no Record and no dir is a
+ * dangling pointer, ignored with one line. `session` carries the Requested
+ * model at a Session start and is null on a plain Passthrough, where no Limit
+ * check applies.
+ */
+async function chooseNamed(ctx: LaunchContext, session: { model: string | null } | null): Promise<Chosen | null> {
+  const override = overrideName(ctx);
+  if (override) return checkNamed(ctx, resolveNamed(override, "override"), "override", session, override);
+  const pinned = readPinnedId();
+  if (!pinned) return null;
+  const record = resolveAccount(pinned);
+  if (!record) {
+    if (listOrphans().includes(pinned)) return checkNamed(ctx, null, "pin", session, pinned);
+    warn(`pinned Account ${pinned} has no Record; ignoring the pin. Run \`mclaude account unpin\``);
+    return null;
+  }
+  return checkNamed(ctx, record, "pin", session);
+}
+
+/** Unknown name exit 64. An Orphan resolves to null and the caller exits 1. */
+function resolveNamed(name: string, source: "override" | "pin"): AccountRecord | null {
+  const record = resolveAccount(name);
+  if (record) return record;
+  if (listOrphans().includes(name)) return null;
+  throw new ExitError(EXIT.USAGE, `no Account named "${name}" for ${source === "override" ? "--account" : "the pin"}`);
+}
+
+/**
+ * The checks a named Account passes before its launch (ADR 0011). An Orphan
+ * or Needs login exits 1 rather than falling through to Selection; Disabled
+ * launches with one line; a live Limit for the Requested model launches with
+ * one line, or exits 75 under onExhausted=fail. Past the threshold: silent.
+ */
+async function checkNamed(
+  ctx: LaunchContext,
+  record: AccountRecord | null,
+  source: "override" | "pin",
+  session: { model: string | null } | null,
+  orphanId?: string,
+): Promise<Chosen> {
+  const by = source === "override" ? "--account" : "the pin";
+  if (!record) {
+    throw new ExitError(EXIT.REFUSED, `${orphanId} is an Orphan with no Record; ${by} cannot launch it. Run \`mclaude account remove ${orphanId}\``);
+  }
+  const who = `${record.alias} (${record.id})`;
+  const dir = accountDir(record.id);
+  if (needsLogin(await readCredential(dir))) {
+    throw new ExitError(EXIT.REFUSED, `${who} needs login; ${by} cannot launch it. Run \`mclaude account login ${record.alias}\``);
+  }
+  if (record.disabled) warn(`${who} is Disabled; launching on it anyway under ${by}`);
+  const now = Date.now();
+  const limit = session ? liveLimit(record, session.model, now) : null;
+  if (limit) {
+    const resetsAt = limit.resetsAt ?? new Date(limitTrustedUntil(record, limit)).toISOString();
+    if (ctx.settings.onExhausted === "fail") throw new ExitError(EXIT.EXHAUSTED, exhaustedFailLine(record.alias, limit.window, resetsAt));
+    warn(`${who} is at its limit; launching on it anyway under ${by}. ${resetsTail(limit.window, resetsAt)}`);
+  }
+  return { record, dir, makeActive: source === "pin", source };
 }
 
 /**
@@ -152,7 +230,7 @@ async function runSessionStart(ctx: LaunchContext): Promise<never> {
     child: null,
     model,
     threshold: ctx.settings.switchThreshold,
-    handoffAllowed: true,
+    handoffAllowed: handoffAllowedFor(chosen),
     handingOff: false,
     pump: isStreamJsonInput(ctx.scan) ? startStdinPump() : null,
     ended: deferred(),
@@ -175,7 +253,10 @@ async function runSessionStart(ctx: LaunchContext): Promise<never> {
       try {
         const record = await recordLimit(live.chosen.record.id, signal, { claudePath: ctx.claudePath, fallbackSessionId: live.sessionId });
         if (record && live.handoffAllowed) await onLimitRecorded(signal, record, live);
-        else if (live.child) live.pump?.attach(live.child);
+        else {
+          if (record) warn(`usage limit on ${record.alias}; ${live.chosen.source === "pin" ? "pinned" : "--account"} holds, staying`);
+          if (live.child) live.pump?.attach(live.child);
+        }
       } finally {
         live.handingOff = false;
         // The child's own exit was held back while the flag was up; release it now.
@@ -271,7 +352,7 @@ async function onLimitRecorded(signal: Signal, record: AccountRecord, live: Live
 
 /** Override, then Pin, then Selection. */
 async function chooseForSessionStart(ctx: LaunchContext, model: string | null): Promise<Chosen> {
-  return chooseBySelection(ctx, model);
+  return (await chooseNamed(ctx, { model })) ?? chooseBySelection(ctx, model);
 }
 
 /**
@@ -329,7 +410,7 @@ function actOnSelection(ctx: LaunchContext, chosen: Selection, records: AccountR
   switch (chosen.kind) {
     case "stay":
     case "move":
-      return { record: chosen.record, dir: accountDir(chosen.id), makeActive: true };
+      return { record: chosen.record, dir: accountDir(chosen.id), makeActive: true, source: "selection" };
     case "none":
       throw new ExitError(EXIT.REFUSED, "every Account is Disabled. Run `mclaude account enable <account>` or pin one");
     case "exhausted":
@@ -341,21 +422,24 @@ function actOnSelection(ctx: LaunchContext, chosen: Selection, records: AccountR
 function chooseFallback(ctx: LaunchContext, records: AccountRecord[], model: string | null, now: number): Chosen {
   if (ctx.settings.onExhausted === "fail") {
     const wall = earliestWall(records, model, now);
-    const when = wall
-      ? `earliest reset is ${wall.record.alias} ${wall.window ?? "usage"} at ${localTime(wall.resetsAt)}`
-      : "no reset time is known";
-    throw new ExitError(EXIT.EXHAUSTED, `every account is at its limit; ${when}. See \`mclaude account list\``);
+    throw new ExitError(EXIT.EXHAUSTED, wall ? exhaustedFailLine(wall.record.alias, wall.window, wall.resetsAt) : exhaustedFailLine(null, null, null));
   }
   const fb = fallback(records, model, now);
   if (!fb) throw new ExitError(EXIT.REFUSED, "every Account is Disabled. Run `mclaude account enable <account>` or pin one");
-  const tail =
-    fb.tier === "unknown"
-      ? "its usage is unknown."
-      : fb.tier === "credits"
-        ? "using extra usage credits."
-        : `${fb.window ?? "usage"} resets ${fb.resetsAt ? localTime(fb.resetsAt) : "at an unknown time"}.`;
+  const tail = fb.tier === "unknown" ? "its usage is unknown." : fb.tier === "credits" ? "using extra usage credits." : resetsTail(fb.window, fb.resetsAt);
   warn(`every account is at its limit. Launching on ${fb.record.alias}; ${tail}`);
-  return { record: fb.record, dir: accountDir(fb.record.id), makeActive: false };
+  return { record: fb.record, dir: accountDir(fb.record.id), makeActive: false, source: "fallback" };
+}
+
+/** The exit-75 line: the Account whose wall lifts first, its Window and the local Reset time. */
+function exhaustedFailLine(alias: string | null, window: string | null, resetsAt: string | null): string {
+  const when = alias && resetsAt ? `earliest reset is ${alias} ${window ?? "usage"} at ${localTime(resetsAt)}` : "no reset time is known";
+  return `every account is at its limit; ${when}. See \`mclaude account list\``;
+}
+
+/** `five_hour resets 3/4/2026, 3:45:00 PM.` for the stderr lines that name a wall. */
+function resetsTail(window: string | null, resetsAt: string | null): string {
+  return `${window ?? "usage"} resets ${resetsAt ? localTime(resetsAt) : "at an unknown time"}.`;
 }
 
 function localTime(iso: string): string {

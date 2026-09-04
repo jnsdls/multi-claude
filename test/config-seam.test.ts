@@ -101,13 +101,60 @@ describe("commands that never open config.json", () => {
     expect(typeof signal.receivedAt).toBe("string");
   });
 
-  test.todo("account list works with an unparseable config.json", () => {});
-  test.todo("account rename works with an unparseable config.json", () => {});
-  test.todo("account remove works with an unparseable config.json", () => {});
-  test.todo("account pin works with an unparseable config.json", () => {});
-  test.todo("account unpin works with an unparseable config.json", () => {});
-  test.todo("account enable works with an unparseable config.json", () => {});
-  test.todo("account disable works with an unparseable config.json", () => {});
+  test("account list works with an unparseable config.json", async () => {
+    h.plantAccount({ alias: "a", active: true });
+    const r = await h.run(["account", "list"]);
+    expect(r.exitCode).toBe(0);
+    expect(r.stderr).toBe("");
+    expect(r.stdout).toContain("a");
+  });
+
+  test("account rename works with an unparseable config.json", async () => {
+    const id = h.plantAccount({ alias: "a" });
+    const r = await h.run(["account", "rename", "a", "b"]);
+    expect(r.exitCode).toBe(0);
+    expect(r.stderr).toBe("");
+    expect(h.readRecord(id).alias).toBe("b");
+  });
+
+  test("account remove works with an unparseable config.json", async () => {
+    const id = h.plantAccount({ alias: "a" });
+    const r = await h.run(["account", "remove", "a", "--yes"]);
+    expect(r.exitCode).toBe(0);
+    expect(r.stderr).toBe(`mclaude: removed a (${id})\n`);
+  });
+
+  test("account pin works with an unparseable config.json", async () => {
+    const id = h.plantAccount({ alias: "a" });
+    const r = await h.run(["account", "pin", "a"]);
+    expect(r.exitCode).toBe(0);
+    expect(r.stderr).toBe("");
+    expect(h.readPinned()).toBe(id);
+  });
+
+  test("account unpin works with an unparseable config.json", async () => {
+    h.setPinned(h.plantAccount({ alias: "a" }));
+    const r = await h.run(["account", "unpin"]);
+    expect(r.exitCode).toBe(0);
+    expect(r.stderr).toBe("");
+    expect(h.readPinned()).toBeNull();
+  });
+
+  test("account enable works with an unparseable config.json", async () => {
+    const id = h.plantAccount({ alias: "a", disabled: true });
+    const r = await h.run(["account", "enable", "a"]);
+    expect(r.exitCode).toBe(0);
+    expect(r.stderr).toBe("");
+    expect(h.readRecord(id).disabled).toBe(false);
+  });
+
+  test("account disable works with an unparseable config.json", async () => {
+    const id = h.plantAccount({ alias: "a" });
+    const r = await h.run(["account", "disable", "a"]);
+    expect(r.exitCode).toBe(0);
+    expect(r.stderr).toBe("");
+    expect(h.readRecord(id).disabled).toBe(true);
+  });
 });
 
 describe("claudePath precedence", () => {
