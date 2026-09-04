@@ -19,7 +19,11 @@ export async function runVersionCommand(): Promise<number> {
   const lines: string[] = [`mclaude ${VERSION}`];
   let claudePath: string | null = null;
   try {
-    claudePath = resolveClaude({ claudePath: process.env.MCLAUDE_CLAUDE_PATH ? { value: process.env.MCLAUDE_CLAUDE_PATH, source: "env" } : undefined });
+    claudePath = resolveClaude({
+      claudePath: process.env.MCLAUDE_CLAUDE_PATH
+        ? { value: process.env.MCLAUDE_CLAUDE_PATH, source: "env" }
+        : undefined,
+    });
   } catch (e) {
     if (!(e instanceof ExitError)) throw e;
   }

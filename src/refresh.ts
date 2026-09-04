@@ -54,7 +54,11 @@ export async function runRefreshTrigger(
 ): Promise<RefreshResult> {
   const env = buildChildEnv({ accountDir, accountId, extra: REFRESH_ENV });
   try {
-    await runCaptured(claudePath, REFRESH_ARGV, env, { cwd: accountDir, timeoutMs: REFRESH_TIMEOUT_MS, stdin: "ignore" });
+    await runCaptured(claudePath, REFRESH_ARGV, env, {
+      cwd: accountDir,
+      timeoutMs: REFRESH_TIMEOUT_MS,
+      stdin: "ignore",
+    });
   } catch {
     // A spawn failure reads the same as an unchanged credential below.
   }

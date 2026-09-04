@@ -5,7 +5,14 @@
 import type { Signal } from "./hook.ts";
 import { readRecord, updateRecord, type AccountRecord, type LastLimit } from "./record.ts";
 import { pollAccount } from "./usage.ts";
-import { applicableWindows, evidentWindows, isUnknown, LAUNCH_TIMEOUT_MS, tightestWindow, type NamedWindow } from "./windows.ts";
+import {
+  applicableWindows,
+  evidentWindows,
+  isUnknown,
+  LAUNCH_TIMEOUT_MS,
+  tightestWindow,
+  type NamedWindow,
+} from "./windows.ts";
 
 /** With no Reset to go by, a Limit is believed this long after it was reported. */
 export const LIMIT_DEFAULT_TRUST_MS = 5 * 3600_000;
@@ -71,7 +78,11 @@ export function limitClearedByReading(record: Pick<AccountRecord, "usage">, limi
  * applies to the model, trust in it has not ended, and no later Reading has
  * shown the Window open.
  */
-export function liveLimit(record: Pick<AccountRecord, "usage" | "lastLimit">, model: string | null, now: number): LastLimit | null {
+export function liveLimit(
+  record: Pick<AccountRecord, "usage" | "lastLimit">,
+  model: string | null,
+  now: number,
+): LastLimit | null {
   const limit = record.lastLimit;
   if (!limit || !limitApplies(limit, model)) return null;
   if (limitClearedByReading(record, limit)) return null;
@@ -84,7 +95,11 @@ export function liveLimit(record: Pick<AccountRecord, "usage" | "lastLimit">, mo
  * Unknown, not free: nothing has shown the Window open. A Reading fetched after
  * trust ended retires the Limit and speaks for itself.
  */
-export function limitLeavesUnknown(record: Pick<AccountRecord, "usage" | "lastLimit">, model: string | null, now: number): boolean {
+export function limitLeavesUnknown(
+  record: Pick<AccountRecord, "usage" | "lastLimit">,
+  model: string | null,
+  now: number,
+): boolean {
   const limit = record.lastLimit;
   if (!limit || !limitApplies(limit, model)) return false;
   if (limitClearedByReading(record, limit)) return false;
@@ -95,7 +110,11 @@ export function limitLeavesUnknown(record: Pick<AccountRecord, "usage" | "lastLi
 }
 
 /** Unknown for Selection: no Reading to decide on, or a Limit whose trust ended without evidence either way. */
-export function accountIsUnknownForSelection(record: Pick<AccountRecord, "usage" | "lastLimit">, model: string | null, now: number): boolean {
+export function accountIsUnknownForSelection(
+  record: Pick<AccountRecord, "usage" | "lastLimit">,
+  model: string | null,
+  now: number,
+): boolean {
   return isUnknown(record, now) || limitLeavesUnknown(record, model, now);
 }
 
@@ -121,7 +140,11 @@ export function windowFromWallText(text: string | undefined): string | null {
  * when the payload lacks it). Neither the Window nor the Reset is in the
  * payload; the post-Limit usage request names them.
  */
-export function limitFromSignal(payload: Record<string, unknown>, receivedAt: string, fallbackSessionId = ""): LastLimit {
+export function limitFromSignal(
+  payload: Record<string, unknown>,
+  receivedAt: string,
+  fallbackSessionId = "",
+): LastLimit {
   const sessionId = typeof payload.session_id === "string" ? payload.session_id : fallbackSessionId;
   return { reportedAt: receivedAt, sessionId, window: null, resetsAt: null };
 }
@@ -134,7 +157,11 @@ function wallText(payload: Record<string, unknown>): string | undefined {
  * The Window a Reading blames for a Limit hit under `model`: the applicable
  * Window reading 100, else the highest evident one. Null with no evident Window.
  */
-export function windowBlamed(record: Pick<AccountRecord, "usage">, model: string | null, now: number): NamedWindow | null {
+export function windowBlamed(
+  record: Pick<AccountRecord, "usage">,
+  model: string | null,
+  now: number,
+): NamedWindow | null {
   const full = applicableWindows(record.usage.lastGood, model, now).find((w) => w.utilization >= 100);
   return full ?? tightestWindow(evidentWindows(record.usage.lastGood, now));
 }
@@ -144,7 +171,12 @@ function fetchedAfter(record: Pick<AccountRecord, "usage">, iso: string): boolea
   return !Number.isNaN(fetched) && fetched > parse(iso);
 }
 
-function nameLimit(accountId: string, fallback: AccountRecord, window: string | null, resetsAt: string | null): AccountRecord {
+function nameLimit(
+  accountId: string,
+  fallback: AccountRecord,
+  window: string | null,
+  resetsAt: string | null,
+): AccountRecord {
   return updateRecord(accountId, (latest) => {
     const rec = latest ?? fallback;
     return rec.lastLimit ? { ...rec, lastLimit: { ...rec.lastLimit, window, resetsAt } } : rec;
@@ -173,14 +205,17 @@ export async function recordLimit(
   const reported = limitFromSignal(signal.payload, signal.receivedAt, opts.fallbackSessionId);
   const prior = liveLimit(current, null, now);
   const confirmed = prior && fetchedAfter(current, prior.reportedAt) ? prior : null;
-  const carried: LastLimit = confirmed ? { ...reported, window: confirmed.window, resetsAt: confirmed.resetsAt } : reported;
+  const carried: LastLimit = confirmed
+    ? { ...reported, window: confirmed.window, resetsAt: confirmed.resetsAt }
+    : reported;
   let record = updateRecord(accountId, (latest) => ({ ...(latest ?? current), lastLimit: carried }));
   if (confirmed) return record;
 
   if (!fetchedAfter(record, reported.reportedAt)) {
     const result = await pollAccount(record, { timeoutMs: LAUNCH_TIMEOUT_MS, claudePath: opts.claudePath, now });
     record = result.record;
-    if (result.outcome?.kind !== "ok") return nameLimit(accountId, record, windowFromWallText(wallText(signal.payload)), null);
+    if (result.outcome?.kind !== "ok")
+      return nameLimit(accountId, record, windowFromWallText(wallText(signal.payload)), null);
   }
   const blamed = windowBlamed(record, model, now);
   if (!blamed) return nameLimit(accountId, record, windowFromWallText(wallText(signal.payload)), null);

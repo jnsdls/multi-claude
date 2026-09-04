@@ -43,7 +43,13 @@ describe("passthrough", () => {
   test("scrubs session markers and keeps host variables", async () => {
     h.plantAccount({ active: true });
     await h.run(["doctor"], {
-      env: { CLAUDECODE: "1", CLAUDE_CODE_CHILD_SESSION: "1", CLAUDE_CODE_SESSION_ID: "abc", CLAUDE_CODE_ENTRYPOINT: "sdk-ts", CLAUDE_AGENT_SDK_VERSION: "1.0" },
+      env: {
+        CLAUDECODE: "1",
+        CLAUDE_CODE_CHILD_SESSION: "1",
+        CLAUDE_CODE_SESSION_ID: "abc",
+        CLAUDE_CODE_ENTRYPOINT: "sdk-ts",
+        CLAUDE_AGENT_SDK_VERSION: "1.0",
+      },
     });
     const env = h.launches()[0]!.env;
     expect(env.CLAUDECODE).toBeUndefined();
@@ -253,7 +259,9 @@ describe("claude resolution", () => {
     const bin = join(h.root, "pathbin");
     mkdirSync(bin);
     symlinkSync(h.fakeClaude, join(bin, "claude"));
-    let r = await h.run(["doctor"], { env: { MCLAUDE_CLAUDE_PATH: undefined, PATH: `${bin}:${bunDir}:/usr/bin:/bin` } });
+    let r = await h.run(["doctor"], {
+      env: { MCLAUDE_CLAUDE_PATH: undefined, PATH: `${bin}:${bunDir}:/usr/bin:/bin` },
+    });
     expect(r.exitCode).toBe(0);
     const local = join(h.home, ".local", "bin");
     mkdirSync(local, { recursive: true });
@@ -261,7 +269,9 @@ describe("claude resolution", () => {
     chmodSync(join(local, "claude"), 0o755);
     r = await h.run(["doctor"], { env: { MCLAUDE_CLAUDE_PATH: undefined, PATH: `${bunDir}:/usr/bin:/bin` } });
     expect(r.exitCode).toBe(0);
-    r = await h.run(["doctor"], { env: { MCLAUDE_CLAUDE_PATH: undefined, PATH: `${bunDir}:/usr/bin:/bin`, HOME: join(h.root, "nohome") } });
+    r = await h.run(["doctor"], {
+      env: { MCLAUDE_CLAUDE_PATH: undefined, PATH: `${bunDir}:/usr/bin:/bin`, HOME: join(h.root, "nohome") },
+    });
     expect(r.exitCode).toBe(69);
   });
   test("MCLAUDE_HOME is honoured as a literal path", async () => {

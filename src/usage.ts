@@ -4,7 +4,15 @@
 import { needsLogin, readCredential, type OAuthCredential } from "./credential.ts";
 import { isObject } from "./json.ts";
 import { accountDir } from "./paths.ts";
-import { nowIso, readRecord, updateRecord, type AccountRecord, type LimitEntry, type UsageBody, type Window } from "./record.ts";
+import {
+  nowIso,
+  readRecord,
+  updateRecord,
+  type AccountRecord,
+  type LimitEntry,
+  type UsageBody,
+  type Window,
+} from "./record.ts";
 import { refreshDue, runRefreshTrigger, type RefreshOutcome } from "./refresh.ts";
 import { VERSION } from "./version.ts";
 
@@ -21,7 +29,16 @@ export const BACKOFF_MARGIN_MS = 900_000;
 export const BACKOFF_CAP_MS = 4_500_000;
 
 /** The keys whose presence makes a 200 a real body rather than an in-band error. */
-const KNOWN_KEYS = ["five_hour", "seven_day", "seven_day_oauth_apps", "seven_day_opus", "seven_day_sonnet", "cinder_cove", "extra_usage", "limits"];
+const KNOWN_KEYS = [
+  "five_hour",
+  "seven_day",
+  "seven_day_oauth_apps",
+  "seven_day_opus",
+  "seven_day_sonnet",
+  "cinder_cove",
+  "extra_usage",
+  "limits",
+];
 
 export type UsageOutcome =
   | { kind: "ok"; body: UsageBody }
@@ -242,7 +259,10 @@ export async function pollAccount(record: AccountRecord, opts: PollOptions): Pro
 }
 
 /** `pollAccount` over many Records with at most `concurrency` in flight. Results keep the input order. */
-export async function pollMany(records: AccountRecord[], opts: PollOptions & { concurrency: number }): Promise<PollResult[]> {
+export async function pollMany(
+  records: AccountRecord[],
+  opts: PollOptions & { concurrency: number },
+): Promise<PollResult[]> {
   const results: PollResult[] = new Array(records.length);
   let next = 0;
   const worker = async () => {
@@ -257,7 +277,8 @@ export async function pollMany(records: AccountRecord[], opts: PollOptions & { c
 
 /** One stderr-ready line for an outcome that brought no Reading, or null when there is nothing to say. */
 export function describeOutcome(alias: string, result: PollResult): string | null {
-  if (result.refresh === "needs-login") return `${alias}: the refresh token was rejected; run \`mclaude account login ${alias}\``;
+  if (result.refresh === "needs-login")
+    return `${alias}: the refresh token was rejected; run \`mclaude account login ${alias}\``;
   const o = result.outcome;
   if (!o) return null;
   switch (o.kind) {
@@ -270,6 +291,8 @@ export function describeOutcome(alias: string, result: PollResult): string | nul
     case "error":
       return `${alias}: usage fetch failed (${o.reason}); keeping the last reading`;
     case "skipped":
-      return o.reason === "no-profile-scope" ? `${alias}: the token lacks the ${PROFILE_SCOPE} scope, so usage cannot be read` : null;
+      return o.reason === "no-profile-scope"
+        ? `${alias}: the token lacks the ${PROFILE_SCOPE} scope, so usage cannot be read`
+        : null;
   }
 }

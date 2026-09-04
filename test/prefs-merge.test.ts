@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { mergePreferences, seedClaudeJson } from "../src/prefs.ts";
 
 describe("mergePreferences", () => {
-  const cases: { name: string; shared: Record<string, unknown>; account: Record<string, unknown>; expect: Record<string, unknown> }[] = [
+  const cases: {
+    name: string;
+    shared: Record<string, unknown>;
+    account: Record<string, unknown>;
+    expect: Record<string, unknown>;
+  }[] = [
     {
       name: "Shared wins per key, missing Shared key keeps the Account value",
       shared: { theme: "light" },
@@ -25,13 +30,21 @@ describe("mergePreferences", () => {
       name: "approval booleans OR",
       shared: {
         projects: {
-          "/p": { hasTrustDialogAccepted: false, hasClaudeMdExternalIncludesApproved: true, hasClaudeMdExternalIncludesWarningShown: false },
+          "/p": {
+            hasTrustDialogAccepted: false,
+            hasClaudeMdExternalIncludesApproved: true,
+            hasClaudeMdExternalIncludesWarningShown: false,
+          },
         },
       },
       account: { projects: { "/p": { hasTrustDialogAccepted: true, hasClaudeMdExternalIncludesApproved: false } } },
       expect: {
         projects: {
-          "/p": { hasTrustDialogAccepted: true, hasClaudeMdExternalIncludesApproved: true, hasClaudeMdExternalIncludesWarningShown: false },
+          "/p": {
+            hasTrustDialogAccepted: true,
+            hasClaudeMdExternalIncludesApproved: true,
+            hasClaudeMdExternalIncludesWarningShown: false,
+          },
         },
       },
     },
@@ -49,7 +62,11 @@ describe("mergePreferences", () => {
     },
     {
       name: "keys outside the allowlist untouched on both sides",
-      shared: { oauthAccount: { accountUuid: "shared" }, numStartups: 99, projects: { "/p": { lastCost: 5, history: [1] } } },
+      shared: {
+        oauthAccount: { accountUuid: "shared" },
+        numStartups: 99,
+        projects: { "/p": { lastCost: 5, history: [1] } },
+      },
       account: { oauthAccount: { accountUuid: "mine" }, numStartups: 1, projects: { "/p": { lastCost: 1 } } },
       expect: { oauthAccount: { accountUuid: "mine" }, numStartups: 1, projects: { "/p": { lastCost: 1 } } },
     },

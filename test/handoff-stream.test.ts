@@ -31,7 +31,11 @@ function flag(argv: string[], name: string): string | undefined {
 }
 
 const user = (content: unknown) => ({ type: "user", message: { role: "user", content } });
-const assistant = (content: unknown, extra: Record<string, unknown> = {}) => ({ type: "assistant", message: { role: "assistant", content }, ...extra });
+const assistant = (content: unknown, extra: Record<string, unknown> = {}) => ({
+  type: "assistant",
+  message: { role: "assistant", content },
+  ...extra,
+});
 const errorEntry = () => assistant([{ type: "text", text: WALL }], { isApiErrorMessage: true, error: "rate_limit" });
 const PRE_TURN = [user(PROMPT), errorEntry()];
 const MID_TURN = [
@@ -42,16 +46,37 @@ const MID_TURN = [
 ];
 
 /** What the Agent SDK writes: an initialize control request, then user messages with the host's own fields. */
-const INIT = JSON.stringify({ type: "control_request", request_id: "req-1", request: { subtype: "initialize", hooks: {} } });
-const hostUser = (text: string) => JSON.stringify({ type: "user", message: { role: "user", content: text }, parent_tool_use_id: null, session_id: "host-sid" });
+const INIT = JSON.stringify({
+  type: "control_request",
+  request_id: "req-1",
+  request: { subtype: "initialize", hooks: {} },
+});
+const hostUser = (text: string) =>
+  JSON.stringify({
+    type: "user",
+    message: { role: "user", content: text },
+    parent_tool_use_id: null,
+    session_id: "host-sid",
+  });
 const OTHER = hostUser("and then run the tests");
 
-const SDK_ARGS = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--settings", '{"alwaysThinkingEnabled":false}'];
+const SDK_ARGS = [
+  "-p",
+  "--input-format",
+  "stream-json",
+  "--output-format",
+  "stream-json",
+  "--verbose",
+  "--settings",
+  '{"alwaysThinkingEnabled":false}',
+];
 
 async function plantPair() {
   const a = h.plantAccount({ alias: "a", active: true, usage: reading({ session: 50 }) });
   const b = h.plantAccount({ alias: "b", usage: reading({ session: 10 }) });
-  await h.startUsage({ byToken: { [token(a)]: { body: usageBody({ session: 100 }) }, [token(b)]: { body: usageBody({ session: 10 }) } } });
+  await h.startUsage({
+    byToken: { [token(a)]: { body: usageBody({ session: 100 }) }, [token(b)]: { body: usageBody({ session: 10 }) } },
+  });
   return { a, b };
 }
 
@@ -112,7 +137,9 @@ describe("Handoff under a stream-json host", () => {
     const p = h.spawn(SDK_ARGS, { stdin: "pipe" });
     write(p, INIT, hostUser(PROMPT));
     expect(await h.waitFor(() => h.launches()[1]?.exitedOnStdin === true, 10_000)).toBe(true);
-    expect(h.launches()[1]!.stdinLines).toEqual([JSON.stringify({ type: "user", message: { role: "user", content: NUDGE } })]);
+    expect(h.launches()[1]!.stdinLines).toEqual([
+      JSON.stringify({ type: "user", message: { role: "user", content: NUDGE } }),
+    ]);
     await p.exited;
     expect(p.exitCode).toBe(0);
   }, 20_000);

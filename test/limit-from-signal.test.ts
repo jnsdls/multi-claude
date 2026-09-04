@@ -26,8 +26,18 @@ describe("windowFromWallText", () => {
 
 describe("limitFromSignal", () => {
   test("reportedAt is when the hook received it, the session id comes from the payload, no Window and no Reset", () => {
-    const payload = { session_id: "s-9", hook_event_name: "StopFailure", error: "rate_limit", last_assistant_message: "You've hit your session limit · resets 3:45pm" };
-    expect(limitFromSignal(payload, iso(0))).toEqual({ reportedAt: iso(0), sessionId: "s-9", window: null, resetsAt: null });
+    const payload = {
+      session_id: "s-9",
+      hook_event_name: "StopFailure",
+      error: "rate_limit",
+      last_assistant_message: "You've hit your session limit · resets 3:45pm",
+    };
+    expect(limitFromSignal(payload, iso(0))).toEqual({
+      reportedAt: iso(0),
+      sessionId: "s-9",
+      window: null,
+      resetsAt: null,
+    });
   });
   test("a payload with no session id takes the tracked one", () => {
     expect(limitFromSignal({ error: "rate_limit" }, iso(0), "tracked").sessionId).toBe("tracked");
@@ -54,6 +64,8 @@ describe("windowBlamed", () => {
   });
   test("null with no evident Window", () => {
     expect(windowBlamed(record({ id: "a", body: null }), null, NOW)).toBeNull();
-    expect(windowBlamed(record({ id: "a", body: body({ sessionReset: null, weekReset: null }) }), null, NOW)).toBeNull();
+    expect(
+      windowBlamed(record({ id: "a", body: body({ sessionReset: null, weekReset: null }) }), null, NOW),
+    ).toBeNull();
   });
 });

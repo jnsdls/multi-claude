@@ -32,7 +32,11 @@ function flag(argv: string[], name: string): string | undefined {
 }
 
 const user = (content: unknown) => ({ type: "user", message: { role: "user", content } });
-const assistant = (content: unknown, extra: Record<string, unknown> = {}) => ({ type: "assistant", message: { role: "assistant", content }, ...extra });
+const assistant = (content: unknown, extra: Record<string, unknown> = {}) => ({
+  type: "assistant",
+  message: { role: "assistant", content },
+  ...extra,
+});
 const errorEntry = () => assistant([{ type: "text", text: WALL }], { isApiErrorMessage: true, error: "rate_limit" });
 const PRE_TURN = [user(PROMPT), errorEntry()];
 const MID_TURN = [
@@ -61,11 +65,17 @@ function liveMarkers(dir: string): string[] {
 async function plantPair(b: Parameters<typeof usageBody>[0] = { session: 10 }) {
   const a = h.plantAccount({ alias: "a", active: true, usage: reading({ session: 50 }) });
   const bId = h.plantAccount({ alias: "b", usage: reading(b) });
-  await h.startUsage({ byToken: { [token(a)]: { body: usageBody({ session: 100 }) }, [token(bId)]: { body: usageBody(b) } } });
+  await h.startUsage({
+    byToken: { [token(a)]: { body: usageBody({ session: 100 }) }, [token(bId)]: { body: usageBody(b) } },
+  });
   return { a, b: bId };
 }
 
-const limitHook = (payload: Record<string, unknown> = {}) => ({ event: "StopFailure" as const, afterMs: 100, payload: { error: "rate_limit", last_assistant_message: WALL, ...payload } });
+const limitHook = (payload: Record<string, unknown> = {}) => ({
+  event: "StopFailure" as const,
+  afterMs: 100,
+  payload: { error: "rate_limit", last_assistant_message: WALL, ...payload },
+});
 
 /** The first child: writes the transcript, fires SessionStart then the Limit, then lingers. */
 function walled(transcript: unknown[], extra: Partial<CallBehaviour> = {}): CallBehaviour {
@@ -207,7 +217,10 @@ describe("Handoff in the TUI", () => {
     h.scenario({
       calls: [
         walled(PRE_TURN, {
-          hooks: [{ event: "SessionStart", payload: { source: "clear", session_id: "after-clear" } }, limitHook({ session_id: "after-clear" })],
+          hooks: [
+            { event: "SessionStart", payload: { source: "clear", session_id: "after-clear" } },
+            limitHook({ session_id: "after-clear" }),
+          ],
         }),
         { exit: 0 },
       ],
@@ -241,7 +254,9 @@ describe("Handoff in the TUI", () => {
       claudeJson: { projects: { [project]: { hasTrustDialogAccepted: true, enabledMcpjsonServers: ["one"] } } },
     });
     const b = h.plantAccount({ alias: "b", usage: reading({ session: 10 }) });
-    await h.startUsage({ byToken: { [token(a)]: { body: usageBody({ session: 100 }) }, [token(b)]: { body: usageBody({ session: 10 }) } } });
+    await h.startUsage({
+      byToken: { [token(a)]: { body: usageBody({ session: 100 }) }, [token(b)]: { body: usageBody({ session: 10 }) } },
+    });
     h.scenario({ calls: [walled(PRE_TURN), { exit: 0 }] });
     const p = h.spawn([]);
     await waitForRelaunch();
@@ -255,7 +270,12 @@ describe("Handoff in the TUI", () => {
   test("a -p child that walls and exits on its own is handed off after its exit, and the last child's exit is mirrored", async () => {
     await plantPair();
     // The first child fires the Limit and exits 0 at once; the second lingers so the Signal dir can be seen alive under it.
-    h.scenario({ calls: [{ hooks: [limitHook()], exit: 0 }, { exit: 3, sleepMs: 1500 }] });
+    h.scenario({
+      calls: [
+        { hooks: [limitHook()], exit: 0 },
+        { exit: 3, sleepMs: 1500 },
+      ],
+    });
     const p = h.spawn(["-p", PROMPT]);
     await waitForRelaunch();
     const [l0, l1] = h.launches() as [any, any];

@@ -294,7 +294,9 @@ describe("Pin", () => {
     const r = await h.run(["-p", "hi"]);
     expect(r.exitCode).toBe(0);
     expect(lines(r.stderr)).toHaveLength(1);
-    expect(r.stderr).toMatch(/^mclaude: work \(\w+\) is at its limit; launching on it anyway under the pin\. five_hour resets .+\.\n$/);
+    expect(r.stderr).toMatch(
+      /^mclaude: work \(\w+\) is at its limit; launching on it anyway under the pin\. five_hour resets .+\.\n$/,
+    );
     expect(usage.requests).toHaveLength(0);
     expect(launchedIn()).toBe(h.accountDir(work));
     expect(h.readActive()).toBe(work);
@@ -324,7 +326,9 @@ describe("Pin", () => {
     expect(r.exitCode).toBe(75);
     expect(r.stdout).toBe("");
     expect(lines(r.stderr)).toHaveLength(1);
-    expect(r.stderr).toMatch(/^mclaude: every account is at its limit; earliest reset is work five_hour at .+\. See `mclaude account list`\n$/);
+    expect(r.stderr).toMatch(
+      /^mclaude: every account is at its limit; earliest reset is work five_hour at .+\. See `mclaude account list`\n$/,
+    );
     expect(r.stderr).toContain(new Date(Date.now() + H).getFullYear().toString());
     expect(h.launches()).toHaveLength(0);
   });
@@ -400,13 +404,21 @@ describe("a Limit Signal under a Pin", () => {
   const WALL = "You've hit your session limit · resets 3:45pm";
   const PROMPT = "please refactor the parser";
   const user = (content: unknown) => ({ type: "user", message: { role: "user", content } });
-  const errorEntry = () => ({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: WALL }] }, isApiErrorMessage: true, error: "rate_limit" });
+  const errorEntry = () => ({
+    type: "assistant",
+    message: { role: "assistant", content: [{ type: "text", text: WALL }] },
+    isApiErrorMessage: true,
+    error: "rate_limit",
+  });
 
   /** The child writes a transcript, fires the Limit hook, lingers a second and exits clean. */
   function walled(): CallBehaviour {
     return {
       transcript: { path: join(h.root, "transcript.jsonl"), lines: [user(PROMPT), errorEntry()] },
-      hooks: [{ event: "SessionStart", payload: { source: "startup" } }, { event: "StopFailure", afterMs: 100, payload: { error: "rate_limit", last_assistant_message: WALL } }],
+      hooks: [
+        { event: "SessionStart", payload: { source: "startup" } },
+        { event: "StopFailure", afterMs: 100, payload: { error: "rate_limit", last_assistant_message: WALL } },
+      ],
       sleepMs: 1500,
       exit: 0,
     };
@@ -416,7 +428,9 @@ describe("a Limit Signal under a Pin", () => {
     const a = h.plantAccount({ alias: "a", active: true, usage: reading({ session: 50 }) });
     const b = h.plantAccount({ alias: "b", usage: reading({ session: 10 }) });
     h.setPinned(a);
-    const usage = await h.startUsage({ byToken: { [token(a)]: { body: usageBody({ session: 100 }) }, [token(b)]: { body: usageBody({ session: 10 }) } } });
+    const usage = await h.startUsage({
+      byToken: { [token(a)]: { body: usageBody({ session: 100 }) }, [token(b)]: { body: usageBody({ session: 10 }) } },
+    });
     h.scenario({ calls: [walled(), { exit: 0 }] });
     const r = await h.run([]);
     expect(r.exitCode).toBe(0);
@@ -449,14 +463,31 @@ describe("a Limit Signal under a Pin", () => {
 describe("account list under a Pin", () => {
   test("markers, the disabled state and --json pinned", async () => {
     const both = h.plantAccount({ alias: "both", active: true, addedAt: "2026-01-01T00:00:00.000Z" });
-    const off = h.plantAccount({ alias: "off", disabled: true, addedAt: "2026-02-01T00:00:00.000Z", usage: reading({ session: 50 }) });
-    const offGone = h.plantAccount({ alias: "offgone", disabled: true, credential: null, addedAt: "2026-03-01T00:00:00.000Z" });
+    const off = h.plantAccount({
+      alias: "off",
+      disabled: true,
+      addedAt: "2026-02-01T00:00:00.000Z",
+      usage: reading({ session: 50 }),
+    });
+    const offGone = h.plantAccount({
+      alias: "offgone",
+      disabled: true,
+      credential: null,
+      addedAt: "2026-03-01T00:00:00.000Z",
+    });
     h.setPinned(both);
     const r = await h.run(["account", "list"]);
     const rows = r.stdout.trimEnd().split("\n").slice(1);
     expect(rows[0]!.startsWith("*!")).toBe(true);
     expect(rows[1]!.startsWith(" ")).toBe(true);
-    expect(rows.map((l) => l.trim().split(/\s{2,}/).at(-1))).toEqual(["unknown", "disabled", "needs login"]);
+    expect(
+      rows.map((l) =>
+        l
+          .trim()
+          .split(/\s{2,}/)
+          .at(-1),
+      ),
+    ).toEqual(["unknown", "disabled", "needs login"]);
 
     h.setPinned(off);
     const r2 = await h.run(["account", "list"]);
@@ -468,6 +499,10 @@ describe("account list under a Pin", () => {
     const json = JSON.parse((await h.run(["account", "list", "--json"])).stdout);
     expect(json.active).toBe(both);
     expect(json.pinned).toBe(off);
-    expect(json.accounts.map((x: any) => [x.id, x.state])).toEqual([[both, "unknown"], [off, "disabled"], [offGone, "needs login"]]);
+    expect(json.accounts.map((x: any) => [x.id, x.state])).toEqual([
+      [both, "unknown"],
+      [off, "disabled"],
+      [offGone, "needs login"],
+    ]);
   });
 });
