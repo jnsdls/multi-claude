@@ -1,4 +1,4 @@
-// The process-seam harness: spawns the built bin/mclaude with MCLAUDE_HOME in a
+// The process-seam harness: spawns the built dist/main.js with MCLAUDE_HOME in a
 // fresh temp dir, HOME pointing at a temp Shared home, MCLAUDE_CLAUDE_PATH at the
 // fake claude and MCLAUDE_USAGE_URL at a local usage server when one is started.
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, chmodSync } from "node:fs";
@@ -7,7 +7,12 @@ import { join } from "node:path";
 import { startUsageServer, type UsageServer, type UsageScenario } from "./usage-server.ts";
 
 export const REPO_ROOT = join(import.meta.dir, "..", "..");
-export const BIN = join(REPO_ROOT, "bin", "mclaude");
+// The tests run dist/main.js under the same bun that runs them; bin/mclaude is
+// the npm launcher and needs a platform package. Bun strips one leading `--`
+// from a script's argv, so the one below is the one it eats and the test's
+// argv reaches main.js untouched.
+const DIST = join(REPO_ROOT, "dist", "main.js");
+export const BIN = [process.execPath, DIST, "--"];
 export const FAKE_CLAUDE_TS = join(import.meta.dir, "fake-claude.ts");
 
 export interface Scenario {
@@ -135,7 +140,7 @@ export class Harness {
     args: string[],
     opts: { env?: Record<string, string | undefined>; stdin?: string | "pipe" | "ignore"; cwd?: string; timeoutMs?: number } = {},
   ): Promise<RunResult> {
-    const child = Bun.spawn([BIN, ...args], {
+    const child = Bun.spawn([...BIN, ...args], {
       env: this.env(opts.env),
       cwd: opts.cwd ?? this.root,
       stdin: opts.stdin === undefined ? "ignore" : opts.stdin === "pipe" ? "pipe" : opts.stdin === "ignore" ? "ignore" : new TextEncoder().encode(opts.stdin),
@@ -155,7 +160,7 @@ export class Harness {
 
   /** Spawns mclaude and returns the process for tests that drive stdin or signals. */
   spawn(args: string[], opts: { env?: Record<string, string | undefined>; cwd?: string; stdin?: "pipe" | "ignore" } = {}) {
-    return Bun.spawn([BIN, ...args], {
+    return Bun.spawn([...BIN, ...args], {
       env: this.env(opts.env),
       cwd: opts.cwd ?? this.root,
       stdin: opts.stdin ?? "ignore",

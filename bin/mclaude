@@ -1,15 +1,42 @@
-#!/bin/sh
-# npm-channel shim. Extensionless so the Agent SDK execs it directly.
-# POSIX sh rather than a bun shebang because bun strips one leading `--` from a
-# script's argv, which would break `mclaude -- <args>`; the `--` inserted below is
-# the one bun eats, so the user's argv reaches main.js untouched.
-PATH="${PATH:+$PATH:}/usr/bin:/bin"
-self="$0"
-while [ -L "$self" ]; do
-  dir="$(cd "$(dirname "$self")" && pwd)"
-  self="$(readlink "$self")"
-  case "$self" in /*) ;; *) self="$dir/$self" ;; esac
-done
-dir="$(cd "$(dirname "$self")" && pwd)"
-bun="$(command -v bun 2>/dev/null || echo "${BUN_INSTALL:-$HOME/.bun}/bin/bun")"
-exec "$bun" "$dir/../dist/main.js" -- "$@"
+#!/usr/bin/env node
+// npm-channel launcher. Runs the compiled mclaude from the platform package
+// that npm picked for this os and cpu (multi-claude-<os>-<cpu>), with inherited
+// stdio, so the user needs neither Bun nor Node beyond this file. Extensionless
+// so the Agent SDK execs it directly.
+import { spawn } from "node:child_process";
+import { constants } from "node:os";
+import { createRequire } from "node:module";
+
+const target = `${process.platform}-${process.arch}`;
+const pkg = `multi-claude-${target}`;
+let bin;
+try {
+  bin = createRequire(import.meta.url).resolve(`${pkg}/bin/mclaude`);
+} catch {
+  process.stderr.write(
+    `mclaude: the ${pkg} package is not installed. It ships the binary for ${target}; ` +
+      `reinstall multi-claude without --no-optional, or use a release tarball from ` +
+      `https://github.com/jnsdls/multi-claude/releases\n`,
+  );
+  process.exit(69);
+}
+
+const child = spawn(bin, process.argv.slice(2), { stdio: "inherit" });
+
+// Ctrl-C reaches the child through the terminal's process group; this process
+// only has to stay alive until the child is done with it.
+process.on("SIGINT", () => {});
+for (const sig of ["SIGTERM", "SIGHUP"]) process.on(sig, () => child.kill(sig));
+
+child.on("error", (e) => {
+  process.stderr.write(`mclaude: cannot run ${bin}: ${e.message}\n`);
+  process.exit(69);
+});
+child.on("exit", (code, signal) => {
+  if (signal) {
+    process.removeAllListeners(signal);
+    process.kill(process.pid, signal);
+    process.exit(128 + (constants.signals[signal] ?? constants.signals.SIGTERM));
+  }
+  process.exit(code ?? 1);
+});

@@ -6,14 +6,13 @@
 
 mclaude needs Claude Code installed. It finds `claude` through `MCLAUDE_CLAUDE_PATH`, then `claudePath` in its config, then `PATH`, then `~/.local/bin/claude`.
 
-### npm or bun
+### npm
 
-The npm package is a Bun program. Bun must be on `PATH` for the `mclaude` command to run, whichever package manager installed it.
+The npm package is `multi-claude` and installs the `mclaude` command. (The npm name `mclaude` belongs to an unrelated package.) It pulls in one platform package, `multi-claude-<os>-<cpu>`, that carries the compiled binary, so nothing beyond Node is needed to run it. An install with `--no-optional` skips that package and `mclaude` exits 69 saying so.
 
 ```sh
-npm install -g mclaude
-bun add -g mclaude
-bunx mclaude --version
+npm install -g multi-claude
+npx multi-claude --version
 ```
 
 ### Release tarball
@@ -186,3 +185,7 @@ Anthropic's Consumer Terms bar access through automated means outside an API key
 - [Logging in to your Claude account](https://support.claude.com/en/articles/13189465-logging-in-to-your-claude-account), "Authenticating to subscription plans"
 
 Team and Enterprise members should check with their admin. An organization can pin which login Claude Code accepts, and its policy governs the seat above anything mclaude does.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
