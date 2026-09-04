@@ -41,7 +41,15 @@ The Linux builds link against glibc. Alpine and other musl systems have no build
 
 ### Pointing a host at mclaude
 
-Any host that takes a path to the Claude Code binary can take `mclaude` instead: T3 Code's Claude binary setting, or `pathToClaudeCodeExecutable` in the Agent SDK. Give it the full path to `mclaude` (from `which mclaude`) or to the extracted binary. `mclaude --version` prints Claude Code's own version line on stdout, so a host's version check reads the right number.
+Any host that takes a path to the Claude Code binary can take `mclaude` instead: T3 Code's Binary path setting, or `pathToClaudeCodeExecutable` in the Agent SDK. Give it the full path to `mclaude` (from `which mclaude`) or to the extracted binary. `mclaude --version` prints Claude Code's own version line on stdout, so a host's version check reads the right number.
+
+### T3 Code
+
+In T3 Code's settings, on the Claude Code provider, set Binary path to the full path of `mclaude`. A bare `mclaude` also works when the app's `PATH` reaches it. Nothing else changes. T3 Code's own flags, its `--session-id` and its MCP config are forwarded as they are, and every Account links back to the Shared home, so settings, memory and skills are the ones you had under plain `claude`.
+
+To check it took, ask the session to print `MCLAUDE_ACCOUNT`. It holds the Account id the launch chose, and `CLAUDE_CONFIG_DIR` points inside `~/.mclaude/accounts/`.
+
+On a Limit, T3 Code shows the rejected turn end the way Claude Code reports it. The Handoff then delivers the answer as a turn of its own on the next Account. To hold T3 Code on one Account, `mclaude account pin <id|alias>`.
 
 ## Usage
 
