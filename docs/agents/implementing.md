@@ -24,6 +24,9 @@ bunx tsc --noEmit      # typecheck
 | `src/spawn.ts` | spawn with inherited stdio, signal forwarding, exit mirroring, captured runs |
 | `src/record.ts` | Record type, write rule, pointers (`active`, `pinned`), Orphans, name resolution |
 | `src/runmarker.ts`, `src/symlink-farm.ts` | Run marker; per-entry symlinks into the Shared home |
+| `src/usage.ts` | the usage request, its outcomes, the Record write, `pollAccount` and `pollMany` |
+| `src/windows.ts` | pure Window rules (applicable, tightest, fresh, stands, Unknown) and the polling constants |
+| `src/refresh.ts` | the Refresh trigger (ADR 0002) |
 | `src/hook.ts` | `mclaude hook` |
 | `src/launch.ts` | Passthrough: choose the Account, spawn, mirror exit |
 | `src/commands/account/*.ts` | one file per `account` subcommand |
@@ -31,7 +34,7 @@ bunx tsc --noEmit      # typecheck
 
 ## Test seams
 
-Pure rules get table tests (`test/argv.test.ts`, `test/record.test.ts`, `test/config.test.ts`). Everything else drives the built `bin/mclaude` through `test/harness/harness.ts`:
+Pure rules get table tests (`test/argv.test.ts`, `test/record.test.ts`, `test/config.test.ts`, `test/windows.test.ts`, `test/usage-merge.test.ts`). Everything else drives the built `bin/mclaude` through `test/harness/harness.ts`:
 
 - `new Harness()` makes a temp `HOME` (with `.claude/` and `.claude.json`), a temp `MCLAUDE_HOME`, and a fake claude.
 - `h.scenario({...})` scripts the fake claude (`test/harness/fake-claude.ts`): `--version` output, `auth login` outcome, refresh-trigger outcome, per-launch behaviour (exit code, sleep, hooks to fire from the `--settings` file, stdin echo, ignoring SIGTERM).

@@ -7,6 +7,8 @@ import { accountDir, sharedClaudeJson } from "../../paths.ts";
 import { readClaudeJson, seedClaudeJson, accountClaudeJson } from "../../prefs.ts";
 import { EMPTY_USAGE, listRecords, mintId, nowIso, writeActiveId, writeFileAtomic, writeRecord, type AccountRecord } from "../../record.ts";
 import { runSymlinkFarm } from "../../symlink-farm.ts";
+import { describeOutcome, pollAccount } from "../../usage.ts";
+import { LIST_TIMEOUT_MS } from "../../windows.ts";
 import { assertAliasFree, claudeForLogin, identityLine, loginInDir, logoutInDir, parseLoginFlags, sameIdentity } from "./common.ts";
 
 export async function runAdd(args: string[]): Promise<number> {
@@ -54,7 +56,10 @@ export async function runAdd(args: string[]): Promise<number> {
   }
   writeRecord(record);
   if (before.length === 0) writeActiveId(id);
-  // usage poll on success lands with #53
+  // One Reading so `list` has something to show; a failed poll is not a failed add.
+  const polled = await pollAccount(record, { timeoutMs: LIST_TIMEOUT_MS, claudePath });
+  const line = describeOutcome(record.alias, polled);
+  if (line) warn(line);
   process.stdout.write(identityLine(record));
   return EXIT.OK;
 }

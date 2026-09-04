@@ -58,7 +58,9 @@ describe("account add", () => {
     expect(rec.addedAt).toMatch(/^\d{4}-\d\d-\d\dT.*Z$/);
     expect(rec.identity).toMatchObject({ accountUuid: "acc-1", organizationUuid: "org-1", email: "me@example.com", organizationName: "Org", subscriptionType: "max" });
     expect(rec.identity.capturedAt).toMatch(/Z$/);
-    expect(rec.usage).toEqual({ lastGood: null, fetchedAt: null, lastAttemptAt: null, backoffUntil: null, last429At: null });
+    // The one poll after login went to a closed port: attempted, nothing read.
+    expect(rec.usage).toMatchObject({ lastGood: null, fetchedAt: null, backoffUntil: null, last429At: null });
+    expect(rec.usage.lastAttemptAt).toMatch(/Z$/);
     expect(rec.lastLimit).toBeNull();
     expect(statSync(join(h.mclaudeHome, "state", `${id}.json`)).mode & 0o777).toBe(0o600);
     expect(h.readActive()).toBe(id!);
@@ -199,7 +201,7 @@ describe("account list", () => {
     expect(rows.map((c) => (c[0] === "-" ? c[1] : c[0]))).toEqual(["act", "old", "gone", "off", "dead", "orphan01"]);
     expect(lines[1]!.startsWith("*")).toBe(true);
     expect(lines[2]!.startsWith("!")).toBe(true);
-    expect(rows.map((c) => c.at(-1))).toEqual(["ok", "ok", "needs login", "disabled", "needs login", "orphan"]);
+    expect(rows.map((c) => c.at(-1))).toEqual(["unknown", "unknown", "needs login", "disabled", "needs login", "orphan"]);
     const offRow = rows[3]!;
     expect(offRow).toEqual(["off", off, "pro", "-", "-", "-", "-", "disabled"]);
     expect(r.stdout).toContain(active);
@@ -232,9 +234,9 @@ describe("account list", () => {
     });
     const r = await h.run(["account", "list"]);
     const row = r.stdout.split("\n")[1]!;
-    expect(row).toContain("42% (in 1h)");
-    expect(row).toContain("7% (in 2d)");
-    expect(row).toContain("Opus 12% (in 2d)");
+    expect(row).toContain("42% ↻ in 1h");
+    expect(row).toContain("7% ↻ in 2d");
+    expect(row).toContain("Opus 12%");
     expect(row).toMatch(/\s5m\s+ok$/);
   });
 
@@ -249,7 +251,7 @@ describe("account list", () => {
     expect(body.active).toBe(a);
     expect(body.pinned).toBe(b);
     expect(body.accounts.map((x: any) => x.id)).toEqual([a, b]);
-    expect(body.accounts[0].state).toBe("ok");
+    expect(body.accounts[0].state).toBe("unknown");
     expect(body.accounts[1].state).toBe("needs login");
     const { state, ...rest } = body.accounts[0];
     expect(rest).toEqual(h.readRecord(a));

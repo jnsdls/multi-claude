@@ -122,7 +122,8 @@ export class Harness {
       FAKE_CLAUDE_STATE: this.fakeState,
       TERM: process.env.TERM ?? "xterm",
     };
-    if (this.usage) base.MCLAUDE_USAGE_URL = this.usage.url;
+    // A closed loopback port when no usage server runs, so no test reaches the real endpoint.
+    base.MCLAUDE_USAGE_URL = this.usage ? this.usage.url : "http://127.0.0.1:9";
     for (const [k, v] of Object.entries(extra)) {
       if (v === undefined) delete base[k];
       else base[k] = v;

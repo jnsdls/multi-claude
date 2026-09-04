@@ -7,6 +7,9 @@ import { relativeAge, relativeUntil } from "../../format.ts";
 import { warn } from "../../log.ts";
 import { accountDir } from "../../paths.ts";
 import { listOrphans, listRecords, readActiveId, readPinnedId, type AccountRecord, type Window } from "../../record.ts";
+import { describeOutcome, pollMany } from "../../usage.ts";
+import { isFresh, isUnknown, LIST_CONCURRENCY, LIST_TIMEOUT_MS } from "../../windows.ts";
+import { claudeWithoutConfig } from "./common.ts";
 
 export type AccountState = "ok" | "needs login" | "orphan" | "disabled" | "unknown" | `limit ${string}`;
 
@@ -24,16 +27,17 @@ export function markers(active: boolean, pinned: boolean): string {
   return `${active ? "*" : ""}${pinned ? "!" : ""}`;
 }
 
+/** `42% ↻ in 1h`, or `-` when the Window is absent. */
 function windowCell(w: Window | null | undefined, now: number): string {
   if (!w || w.utilization === null || w.utilization === undefined) return "-";
-  return `${Math.round(w.utilization)}% (${relativeUntil(w.resets_at, now)})`;
+  return `${Math.round(w.utilization)}% ↻ ${relativeUntil(w.resets_at, now)}`;
 }
 
-/** Per-model Windows: `Opus 12% (in 3d), Sonnet 4% (in 3d)`, or `-` when none. */
-function modelWindowsCell(record: AccountRecord, now: number): string {
-  const scoped = (record.usage.lastGood?.limits ?? []).filter((l) => l.scope?.model);
+/** Per-model weekly Windows: `Opus 12% Sonnet 4%`, or `-` when none. */
+function modelWindowsCell(record: AccountRecord): string {
+  const scoped = (record.usage.lastGood?.limits ?? []).filter((l) => l.kind === "weekly_scoped" && l.scope?.model?.display_name);
   if (scoped.length === 0) return "-";
-  return scoped.map((l) => `${l.scope!.model!.display_name} ${Math.round(l.percent)}% (${relativeUntil(l.resets_at, now)})`).join(", ");
+  return scoped.map((l) => `${l.scope!.model!.display_name} ${Math.round(l.percent)}%`).join(" ");
 }
 
 /** One table row's cells, in COLUMNS order. Pure. */
@@ -47,7 +51,7 @@ export function buildRow(input: RowInput, now: number = Date.now()): string[] {
     record.identity.subscriptionType ?? "-",
     windowCell(usage.lastGood?.five_hour, now),
     windowCell(usage.lastGood?.seven_day, now),
-    modelWindowsCell(record, now),
+    modelWindowsCell(record),
     relativeAge(usage.fetchedAt, now),
     input.state,
   ];
@@ -57,10 +61,11 @@ export function orphanRow(id: string): string[] {
   return ["", "-", id, "-", "-", "-", "-", "-", "orphan"];
 }
 
-/** Disabled wins over ok; needs login wins over both. Limit and unknown arrive with usage. */
-export function stateOf(record: AccountRecord, loggedOut: boolean): AccountState {
+/** Needs login wins, then disabled, then unknown. `limit <window>` lands with #57. */
+export function stateOf(record: AccountRecord, loggedOut: boolean, now: number = Date.now()): AccountState {
   if (loggedOut) return "needs login";
   if (record.disabled) return "disabled";
+  if (isUnknown(record, now)) return "unknown";
   return "ok";
 }
 
@@ -81,15 +86,39 @@ export function renderTable(rows: string[][]): string {
     .join("\n");
 }
 
+/**
+ * `--refresh`: every Account whose Reading is older than 180 s gets the Refresh
+ * trigger when due and one usage request, Disabled included. A Needs login
+ * Account is never asked; backoff is honoured inside the poll. claude comes
+ * from the environment or PATH, never config.json.
+ */
+async function refreshRecords(records: AccountRecord[]): Promise<AccountRecord[]> {
+  const now = Date.now();
+  const due: AccountRecord[] = [];
+  for (const r of records) {
+    if (isFresh(r.usage, now)) continue;
+    if (needsLogin(await readCredential(accountDir(r.id)))) continue;
+    due.push(r);
+  }
+  const results = await pollMany(due, { concurrency: LIST_CONCURRENCY, timeoutMs: LIST_TIMEOUT_MS, claudePath: claudeWithoutConfig(), now });
+  const updated = new Map(results.map((p) => [p.record.id, p.record]));
+  for (const p of results) {
+    const line = describeOutcome(p.record.alias, p);
+    if (line) warn(line);
+  }
+  return records.map((r) => updated.get(r.id) ?? r);
+}
+
 export async function runList(args: string[]): Promise<number> {
   let json = false;
+  let refresh = false;
   for (const a of args) {
     if (a === "--json") json = true;
-    else if (a === "--refresh") {
-      // --refresh polls every Account first; lands with #53
-    } else throw new ExitError(EXIT.USAGE, `unknown flag "${a}" for account list`);
+    else if (a === "--refresh") refresh = true;
+    else throw new ExitError(EXIT.USAGE, `unknown flag "${a}" for account list`);
   }
-  const records = listRecords();
+  let records = listRecords();
+  if (refresh) records = await refreshRecords(records);
   const orphans = listOrphans();
   const active = readActiveId();
   const pinnedRaw = readPinnedId();
@@ -100,8 +129,9 @@ export async function runList(args: string[]): Promise<number> {
     return EXIT.OK;
   }
   const sorted = sortRecords(records, active);
+  const now = Date.now();
   const states = new Map<string, AccountState>();
-  for (const r of sorted) states.set(r.id, stateOf(r, needsLogin(await readCredential(accountDir(r.id)))));
+  for (const r of sorted) states.set(r.id, stateOf(r, needsLogin(await readCredential(accountDir(r.id))), now));
 
   if (json) {
     const body = {
@@ -113,7 +143,6 @@ export async function runList(args: string[]): Promise<number> {
     process.stdout.write(`${JSON.stringify(body, null, 2)}\n`);
     return EXIT.OK;
   }
-  const now = Date.now();
   const rows = sorted.map((r) => buildRow({ record: r, state: states.get(r.id)!, active: r.id === active, pinned: r.id === pinned }, now));
   for (const id of orphans) rows.push(orphanRow(id));
   process.stdout.write(`${renderTable(rows)}\n`);

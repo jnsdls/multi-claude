@@ -70,6 +70,8 @@ mclaude version                  # mclaude, claude, bun, Checked version, Versio
 
 `mclaude hook` is what the Limit hook runs inside Claude Code. You never call it.
 
+`account list` answers from the last reading; `account list --refresh` reads every Account's usage meter again. An access token within five minutes of expiry is renewed first by the Refresh trigger, a `claude -p` run inside the Account dir pointed at a closed local port, so Claude Code rotates the token itself and no prompt reaches a model. That write path is verified on macOS against a real claude; on Linux, where the credential is a file, it is untested.
+
 mclaude's own flags work anywhere before a bare `--` and are stripped before forwarding:
 
 | Flag | Effect |

@@ -17,6 +17,9 @@ export const MCLAUDE_CHILD_VARS = [
   "MCLAUDE_ACCOUNT",
 ] as const;
 
+/** mclaude's own test seam. Never reaches a child, so claude keeps talking to the real endpoint. */
+export const MCLAUDE_PRIVATE_VARS = ["MCLAUDE_USAGE_URL"] as const;
+
 export interface ChildEnvOptions {
   /** The Account dir, passed byte-identical every launch. Omitted only for the bare `--version` probe with no Account. */
   accountDir?: string;
@@ -41,6 +44,7 @@ export function buildChildEnv(opts: ChildEnvOptions): Record<string, string> {
   }
   for (const name of SCRUBBED_MARKERS) delete env[name];
   for (const name of MCLAUDE_CHILD_VARS) delete env[name];
+  for (const name of MCLAUDE_PRIVATE_VARS) delete env[name];
   if (opts.accountDir !== undefined) {
     env.CLAUDE_CONFIG_DIR = opts.accountDir;
     env.CLAUDE_SECURESTORAGE_CONFIG_DIR = opts.accountDir;

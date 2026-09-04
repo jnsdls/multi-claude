@@ -33,6 +33,10 @@ describe("buildChildEnv", () => {
     expect(env.MCLAUDE_ACCOUNT).toBe("abc");
     expect(env.MCLAUDE_LIMIT_DIR).toBe("/h/.mclaude/limits/s");
   });
+  test("the usage endpoint override never reaches a child", () => {
+    const env = buildChildEnv({ base: { MCLAUDE_USAGE_URL: "http://127.0.0.1:1" }, accountDir: "/a", accountId: "a" });
+    expect(env.MCLAUDE_USAGE_URL).toBeUndefined();
+  });
   test("inherited mclaude variables never leak when not set", () => {
     const env = buildChildEnv({ base: { MCLAUDE_LIMIT_DIR: "/x", CLAUDE_CONFIG_DIR: "/y" }, accountDir: "/a", accountId: "a" });
     expect(env.MCLAUDE_LIMIT_DIR).toBeUndefined();
