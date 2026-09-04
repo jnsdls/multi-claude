@@ -1,0 +1,60 @@
+# Nightly: install the latest Claude Code, extract its flag and command names,
+# diff them against fixtures/claude-help.json, and keep one issue labelled
+# claude-drift current (ADR 0012). Never runs on push or pull_request, and the
+# job stays green when drift is found: the issue is the signal.
+name: claude-drift
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - name: Install the latest Claude Code
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Compare names against the fixture
+        id: drift
+        run: |
+          set -o pipefail
+          status=0
+          bun run scripts/check-drift.ts "$HOME/.local/bin/claude" | tee drift.md || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "installed=$(claude --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure the label exists
+        if: steps.drift.outputs.status != '0'
+        run: gh label create claude-drift --force --color D93F0B --description "claude --help names differ from fixtures/claude-help.json"
+
+      - name: Open or update the drift issue
+        if: steps.drift.outputs.status != '0'
+        run: |
+          title="Claude Code ${{ steps.drift.outputs.installed }} drifted from the checked fixture"
+          {
+            echo "Nightly run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo
+            cat drift.md
+          } > body.md
+          existing="$(gh issue list --label claude-drift --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --title "$title" --body-file body.md
+          else
+            gh issue create --label claude-drift --title "$title" --body-file body.md
+          fi

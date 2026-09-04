@@ -1,0 +1,15 @@
+#!/bin/sh
+# npm-channel shim. Extensionless so the Agent SDK execs it directly.
+# POSIX sh rather than a bun shebang because bun strips one leading `--` from a
+# script's argv, which would break `mclaude -- <args>`; the `--` inserted below is
+# the one bun eats, so the user's argv reaches main.js untouched.
+PATH="${PATH:+$PATH:}/usr/bin:/bin"
+self="$0"
+while [ -L "$self" ]; do
+  dir="$(cd "$(dirname "$self")" && pwd)"
+  self="$(readlink "$self")"
+  case "$self" in /*) ;; *) self="$dir/$self" ;; esac
+done
+dir="$(cd "$(dirname "$self")" && pwd)"
+bun="$(command -v bun 2>/dev/null || echo "${BUN_INSTALL:-$HOME/.bun}/bin/bun")"
+exec "$bun" "$dir/../dist/main.js" -- "$@"
