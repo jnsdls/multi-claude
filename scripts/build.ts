@@ -1,15 +1,15 @@
 // Builds dist/main.js (what the tests and `bun dist/main.js` run) and, with
-// --compile, one binary per target under out/ plus the npm platform package
-// for it under npm/<package>/. The version comes from package.json and is
-// injected at build time; nothing reads package.json at runtime.
-import { chmodSync, copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+// --compile, one binary per target under out/ plus the five npm packages under
+// npm/ (see stage.ts). The version comes from package.json and is injected at
+// build time; nothing reads package.json at runtime.
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { $ } from "bun";
-import { platformPackage, TARGETS, type Target } from "./platforms.ts";
+import { TARGETS } from "./platforms.ts";
+import { readRootManifest, stageMainPackage, stagePlatformPackage } from "./stage.ts";
 
 const root = join(import.meta.dir, "..");
-const pkg = await Bun.file(join(root, "package.json")).json();
-const version: string = pkg.version;
+const version = readRootManifest(root).version as string;
 const define = { MCLAUDE_VERSION: JSON.stringify(version) };
 const entry = join(root, "src/main.ts");
 
@@ -40,43 +40,9 @@ if (!compile) {
     // download. --force because bun 1.4 already signs a cross-compiled darwin output.
     if (t.startsWith("darwin") && process.platform === "darwin") await $`codesign --force --sign - ${outfile}`;
     console.log(`built out/mclaude-${t} (${version})`);
-    stagePlatformPackage(t, outfile);
+    stagePlatformPackage(root, t, outfile);
+    console.log(`staged npm/multi-claude-${t}`);
   }
-}
-
-/** Writes npm/<package>/ ready for `npm publish`: the binary, a manifest, README, LICENSE. */
-function stagePlatformPackage(t: Target, binary: string) {
-  const name = platformPackage(t);
-  const [os, cpu] = t.split("-");
-  const dir = join(root, "npm", name);
-  rmSync(dir, { recursive: true, force: true });
-  mkdirSync(join(dir, "bin"), { recursive: true });
-  copyFileSync(binary, join(dir, "bin", "mclaude"));
-  chmodSync(join(dir, "bin", "mclaude"), 0o755);
-  copyFileSync(join(root, "LICENSE"), join(dir, "LICENSE"));
-  writeFileSync(
-    join(dir, "package.json"),
-    `${JSON.stringify(
-      {
-        name,
-        version,
-        description: `The mclaude binary for ${t}. Installed by the @jnsdls/multi-claude package; not for direct use.`,
-        license: pkg.license,
-        repository: pkg.repository,
-        homepage: pkg.homepage,
-        bugs: pkg.bugs,
-        os: [os],
-        cpu: [cpu],
-        files: ["bin"],
-        preferUnplugged: true,
-      },
-      null,
-      2,
-    )}\n`,
-  );
-  writeFileSync(
-    join(dir, "README.md"),
-    `# ${name}\n\nThe compiled \`mclaude\` binary for ${t}. The [@jnsdls/multi-claude](https://www.npmjs.com/package/@jnsdls/multi-claude) package depends on it and picks the one for your platform; install that instead.\n`,
-  );
-  console.log(`staged npm/${name}`);
+  stageMainPackage(root);
+  console.log("staged npm/multi-claude");
 }

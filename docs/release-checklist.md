@@ -23,7 +23,7 @@ The `release` workflow runs on the tag. Confirm on the run:
 - `gh release view v<version>` lists `mclaude-darwin-arm64.tar.gz`, `mclaude-darwin-x64.tar.gz`, `mclaude-linux-x64.tar.gz`, `mclaude-linux-arm64.tar.gz` and `SHASUMS256.txt`,
 - `npm view @jnsdls/multi-claude version` prints the new version, and so does each of `multi-claude-darwin-arm64`, `multi-claude-darwin-x64`, `multi-claude-linux-x64`, `multi-claude-linux-arm64`.
 
-npm gets five packages: the four platform packages, each carrying one compiled binary, then `@jnsdls/multi-claude`, whose `optionalDependencies` pin them at the same version (`npm version` keeps the pins in step through the `version` script). The workflow publishes by trusted publishing (OIDC), so no npm token is stored anywhere. npm only lets a trusted publisher be configured for a package that already exists, which makes the first release a one-off by hand:
+npm gets five packages: the four platform packages, each carrying one compiled binary, then `@jnsdls/multi-claude`, whose `optionalDependencies` pin them at the same version. `bun run build:binaries` stages all five under `npm/` from the repo's `package.json` version (`scripts/stage.ts`); the repo's own `package.json` is private and never published. The workflow publishes by trusted publishing (OIDC), so no npm token is stored anywhere. npm only lets a trusted publisher be configured for a package that already exists, which makes the first release a one-off by hand:
 
 1. Make the repo public. npm refuses provenance from a private repo.
 2. From a clean checkout of `main` on a Mac, `npm login`, then:
