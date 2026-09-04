@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { accountIsUnknownForSelection, LIMIT_DEFAULT_TRUST_MS, limitApplies, limitClearedByReading, limitTrustedUntil, liveLimit } from "../src/limit.ts";
+import {
+  accountIsUnknownForSelection,
+  LIMIT_DEFAULT_TRUST_MS,
+  limitApplies,
+  limitClearedByReading,
+  limitTrustedUntil,
+  liveLimit,
+} from "../src/limit.ts";
 import { body, H, iso, limit, MIN, NOW, record } from "./harness/records.ts";
 
 describe("limitApplies: scope", () => {
@@ -25,7 +32,10 @@ describe("limitTrustedUntil", () => {
     expect(limitTrustedUntil(r, limit({ resetsAt: 3 * H }))).toBe(NOW + 3 * H);
   });
   test("else the earliest Reset in the Reading after the report", () => {
-    const r = record({ id: "a", body: body({ sessionReset: iso(-20 * MIN), weekReset: iso(50 * H), scoped: [["Opus", 10, iso(4 * H)]] }) });
+    const r = record({
+      id: "a",
+      body: body({ sessionReset: iso(-20 * MIN), weekReset: iso(50 * H), scoped: [["Opus", 10, iso(4 * H)]] }),
+    });
     expect(limitTrustedUntil(r, limit({ reportedAt: -10 * MIN }))).toBe(NOW + 4 * H);
   });
   test("else 5 h from the report", () => {
@@ -79,18 +89,33 @@ describe("liveLimit", () => {
     expect(liveLimit(record({ id: "a", body: body() }), null, NOW)).toBeNull();
   });
   test("live until its Reset", () => {
-    const r = record({ id: "a", body: body({ session: 100 }), fetchedAt: -15 * MIN, lastLimit: limit({ reportedAt: -10 * MIN, resetsAt: H }) });
+    const r = record({
+      id: "a",
+      body: body({ session: 100 }),
+      fetchedAt: -15 * MIN,
+      lastLimit: limit({ reportedAt: -10 * MIN, resetsAt: H }),
+    });
     expect(liveLimit(r, "claude-sonnet-4", NOW)).not.toBeNull();
     expect(liveLimit(r, "claude-sonnet-4", NOW + H)).toBeNull();
   });
   test("not live for a model outside a scoped Window", () => {
-    const r = record({ id: "a", body: body({ scoped: [["Opus", 100]] }), fetchedAt: -15 * MIN, lastLimit: limit({ reportedAt: -10 * MIN, window: "Opus", resetsAt: H }) });
+    const r = record({
+      id: "a",
+      body: body({ scoped: [["Opus", 100]] }),
+      fetchedAt: -15 * MIN,
+      lastLimit: limit({ reportedAt: -10 * MIN, window: "Opus", resetsAt: H }),
+    });
     expect(liveLimit(r, "claude-sonnet-4", NOW)).toBeNull();
     expect(liveLimit(r, "claude-opus-4-1", NOW)).not.toBeNull();
     expect(liveLimit(r, null, NOW)).not.toBeNull();
   });
   test("cleared early by evidence", () => {
-    const r = record({ id: "a", body: body({ session: 20 }), fetchedAt: -5 * MIN, lastLimit: limit({ reportedAt: -10 * MIN, resetsAt: H }) });
+    const r = record({
+      id: "a",
+      body: body({ session: 20 }),
+      fetchedAt: -5 * MIN,
+      lastLimit: limit({ reportedAt: -10 * MIN, resetsAt: H }),
+    });
     expect(liveLimit(r, null, NOW)).toBeNull();
   });
   test("an unnamed Limit with no Reading is live for 5 h", () => {
@@ -108,20 +133,40 @@ describe("accountIsUnknownForSelection", () => {
     expect(accountIsUnknownForSelection(record({ id: "a", body: body() }), null, NOW)).toBe(false);
   });
   test("an expired Limit with no clearing Reading leaves the Account Unknown, not free", () => {
-    const r = record({ id: "a", body: body({ session: 100 }), fetchedAt: -3 * H, lastLimit: limit({ reportedAt: -2 * H, resetsAt: -MIN }) });
+    const r = record({
+      id: "a",
+      body: body({ session: 100 }),
+      fetchedAt: -3 * H,
+      lastLimit: limit({ reportedAt: -2 * H, resetsAt: -MIN }),
+    });
     expect(liveLimit(r, null, NOW)).toBeNull();
     expect(accountIsUnknownForSelection(r, null, NOW)).toBe(true);
   });
   test("an expired Limit for another model does not", () => {
-    const r = record({ id: "a", body: body(), fetchedAt: -3 * H, lastLimit: limit({ reportedAt: -2 * H, window: "Opus", resetsAt: -MIN }) });
+    const r = record({
+      id: "a",
+      body: body(),
+      fetchedAt: -3 * H,
+      lastLimit: limit({ reportedAt: -2 * H, window: "Opus", resetsAt: -MIN }),
+    });
     expect(accountIsUnknownForSelection(r, "claude-sonnet-4", NOW)).toBe(false);
   });
   test("a Reading fetched after trust ended retires the Limit", () => {
-    const r = record({ id: "a", body: body({ session: 100 }), fetchedAt: -30_000, lastLimit: limit({ reportedAt: -2 * H, resetsAt: -MIN }) });
+    const r = record({
+      id: "a",
+      body: body({ session: 100 }),
+      fetchedAt: -30_000,
+      lastLimit: limit({ reportedAt: -2 * H, resetsAt: -MIN }),
+    });
     expect(accountIsUnknownForSelection(r, null, NOW)).toBe(false);
   });
   test("a clearing Reading before the trust ended is known too", () => {
-    const r = record({ id: "a", body: body({ session: 30 }), fetchedAt: -90 * MIN, lastLimit: limit({ reportedAt: -2 * H, resetsAt: -MIN }) });
+    const r = record({
+      id: "a",
+      body: body({ session: 30 }),
+      fetchedAt: -90 * MIN,
+      lastLimit: limit({ reportedAt: -2 * H, resetsAt: -MIN }),
+    });
     expect(accountIsUnknownForSelection(r, null, NOW)).toBe(false);
   });
 });

@@ -8,7 +8,11 @@ describe("classifyMode", () => {
     expect(classifyMode(["hook"])).toEqual({ kind: "hook" });
   });
   test("bare -- forces passthrough of the rest", () => {
-    expect(classifyMode(["--", "account", "list"])).toEqual({ kind: "passthrough", argv: ["account", "list"], forced: true });
+    expect(classifyMode(["--", "account", "list"])).toEqual({
+      kind: "passthrough",
+      argv: ["account", "list"],
+      forced: true,
+    });
   });
   test("anything else is passthrough, no list of claude commands", () => {
     expect(classifyMode(["foo", "bar"])).toEqual({ kind: "passthrough", argv: ["foo", "bar"], forced: false });
@@ -23,7 +27,11 @@ describe("stripOwnFlags", () => {
     [["--model", "opus", "--account", "work"], { account: "work" }, ["--model", "opus"]],
     [["--account=work", "--", "--account", "x"], { account: "work" }, ["--", "--account", "x"]],
     [["-p", "--", "--on-exhausted", "fail"], {}, ["-p", "--", "--on-exhausted", "fail"]],
-    [["a", "--account", "w", "b", "--switch-threshold", "5", "c"], { account: "w", switchThreshold: "5" }, ["a", "b", "c"]],
+    [
+      ["a", "--account", "w", "b", "--switch-threshold", "5", "c"],
+      { account: "w", switchThreshold: "5" },
+      ["a", "b", "c"],
+    ],
   ];
   for (const [argv, own, forwarded] of cases) {
     test(argv.join(" "), () => {
@@ -80,11 +88,29 @@ describe("scanArgv", () => {
 });
 
 describe("classify", () => {
-  const sessionStarts = [[], ["hello there"], ["-p", "hi"], ["--resume"], ["--resume", "abc"], ["-c"], ["--bg"], ["--model", "opus"]];
+  const sessionStarts = [
+    [],
+    ["hello there"],
+    ["-p", "hi"],
+    ["--resume"],
+    ["--resume", "abc"],
+    ["-c"],
+    ["--bg"],
+    ["--model", "opus"],
+  ];
   for (const argv of sessionStarts) {
     test(`session start: ${argv.join(" ") || "(tui)"}`, () => expect(classify(scanArgv(argv))).toBe("session-start"));
   }
-  const plain = [["doctor"], ["mcp", "list"], ["plugin", "install", "x"], ["update"], ["attach", "abc"], ["logs", "abc"], ["auth", "status"], ["--model", "opus", "doctor"]];
+  const plain = [
+    ["doctor"],
+    ["mcp", "list"],
+    ["plugin", "install", "x"],
+    ["update"],
+    ["attach", "abc"],
+    ["logs", "abc"],
+    ["auth", "status"],
+    ["--model", "opus", "doctor"],
+  ];
   for (const argv of plain) {
     test(`passthrough: ${argv.join(" ")}`, () => expect(classify(scanArgv(argv))).toBe("passthrough"));
   }
@@ -112,39 +138,141 @@ describe("relaunchArgv", () => {
   const PATH = "/limits/abc-123/settings.json";
 
   test("keeps the user's flags, replaces the session and settings, appends the prompt", () => {
-    expect(relaunchArgv(["--model", "opus", "--session-id", "old", "--settings", "/user.json"], SID, PATH, "again")).toEqual([
-      "--model", "opus", "--resume", SID, "--settings", PATH, "again",
-    ]);
+    expect(
+      relaunchArgv(["--model", "opus", "--session-id", "old", "--settings", "/user.json"], SID, PATH, "again"),
+    ).toEqual(["--model", "opus", "--resume", SID, "--settings", PATH, "again"]);
   });
 
   test("drops the prompt already in the transcript, after -p and after a bare --", () => {
-    expect(relaunchArgv(["-p", "hi", "--model=opus"], SID, PATH, "again")).toEqual(["-p", "--model=opus", "--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["-p", "hi", "--model=opus"], SID, PATH, "again")).toEqual([
+      "-p",
+      "--model=opus",
+      "--resume",
+      SID,
+      "--settings",
+      PATH,
+      "again",
+    ]);
     expect(relaunchArgv(["hi there"], SID, PATH, "again")).toEqual(["--resume", SID, "--settings", PATH, "again"]);
-    expect(relaunchArgv(["--model", "opus", "--", "hi", "--not-a-flag"], SID, PATH, "again")).toEqual(["--model", "opus", "--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["--model", "opus", "--", "hi", "--not-a-flag"], SID, PATH, "again")).toEqual([
+      "--model",
+      "opus",
+      "--resume",
+      SID,
+      "--settings",
+      PATH,
+      "again",
+    ]);
   });
 
   test("values are told from the prompt by arity: variadic keeps every value, boolean none, one exactly one", () => {
-    expect(relaunchArgv(["--add-dir", "/a", "/b", "-p", "hi"], SID, PATH, "again")).toEqual(["--add-dir", "/a", "/b", "-p", "--resume", SID, "--settings", PATH, "again"]);
-    expect(relaunchArgv(["--allowedTools", "Bash", "Read"], SID, PATH, "again")).toEqual(["--allowedTools", "Bash", "Read", "--resume", SID, "--settings", PATH, "again"]);
-    expect(relaunchArgv(["--verbose", "hi"], SID, PATH, "again")).toEqual(["--verbose", "--resume", SID, "--settings", PATH, "again"]);
-    expect(relaunchArgv(["--permission-mode", "plan", "hi"], SID, PATH, "again")).toEqual(["--permission-mode", "plan", "--resume", SID, "--settings", PATH, "again"]);
-    expect(relaunchArgv(["--add-dir", "/x", "--verbose"], SID, PATH, "again")).toEqual(["--add-dir", "/x", "--verbose", "--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["--add-dir", "/a", "/b", "-p", "hi"], SID, PATH, "again")).toEqual([
+      "--add-dir",
+      "/a",
+      "/b",
+      "-p",
+      "--resume",
+      SID,
+      "--settings",
+      PATH,
+      "again",
+    ]);
+    expect(relaunchArgv(["--allowedTools", "Bash", "Read"], SID, PATH, "again")).toEqual([
+      "--allowedTools",
+      "Bash",
+      "Read",
+      "--resume",
+      SID,
+      "--settings",
+      PATH,
+      "again",
+    ]);
+    expect(relaunchArgv(["--verbose", "hi"], SID, PATH, "again")).toEqual([
+      "--verbose",
+      "--resume",
+      SID,
+      "--settings",
+      PATH,
+      "again",
+    ]);
+    expect(relaunchArgv(["--permission-mode", "plan", "hi"], SID, PATH, "again")).toEqual([
+      "--permission-mode",
+      "plan",
+      "--resume",
+      SID,
+      "--settings",
+      PATH,
+      "again",
+    ]);
+    expect(relaunchArgv(["--add-dir", "/x", "--verbose"], SID, PATH, "again")).toEqual([
+      "--add-dir",
+      "/x",
+      "--verbose",
+      "--resume",
+      SID,
+      "--settings",
+      PATH,
+      "again",
+    ]);
   });
 
   test("a flag the table does not know is boolean, and an inline value takes nothing more", () => {
-    expect(relaunchArgv(["--brand-new", "hi"], SID, PATH, "again")).toEqual(["--brand-new", "--resume", SID, "--settings", PATH, "again"]);
-    expect(relaunchArgv(["--add-dir=/a", "/b"], SID, PATH, "again")).toEqual(["--add-dir=/a", "--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["--brand-new", "hi"], SID, PATH, "again")).toEqual([
+      "--brand-new",
+      "--resume",
+      SID,
+      "--settings",
+      PATH,
+      "again",
+    ]);
+    expect(relaunchArgv(["--add-dir=/a", "/b"], SID, PATH, "again")).toEqual([
+      "--add-dir=/a",
+      "--resume",
+      SID,
+      "--settings",
+      PATH,
+      "again",
+    ]);
   });
 
   test("the user's --resume, -r, --continue and -c go, with their values; a bare --resume (the picker) too", () => {
-    expect(relaunchArgv(["--resume", "old", "-p"], SID, PATH, "again")).toEqual(["-p", "--resume", SID, "--settings", PATH, "again"]);
-    expect(relaunchArgv(["-r", "--continue", "-c", "--resume=old"], SID, PATH, "again")).toEqual(["--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["--resume", "old", "-p"], SID, PATH, "again")).toEqual([
+      "-p",
+      "--resume",
+      SID,
+      "--settings",
+      PATH,
+      "again",
+    ]);
+    expect(relaunchArgv(["-r", "--continue", "-c", "--resume=old"], SID, PATH, "again")).toEqual([
+      "--resume",
+      SID,
+      "--settings",
+      PATH,
+      "again",
+    ]);
     expect(relaunchArgv(["--resume"], SID, PATH, "again")).toEqual(["--resume", SID, "--settings", PATH, "again"]);
-    expect(relaunchArgv(["--resume", "--model", "opus"], SID, PATH, "again")).toEqual(["--model", "opus", "--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["--resume", "--model", "opus"], SID, PATH, "again")).toEqual([
+      "--model",
+      "opus",
+      "--resume",
+      SID,
+      "--settings",
+      PATH,
+      "again",
+    ]);
   });
 
   test("no prompt on the stream-json path, and a prompt starting with a dash goes behind --", () => {
-    expect(relaunchArgv(["-p", "--input-format", "stream-json"], SID, PATH, null)).toEqual(["-p", "--input-format", "stream-json", "--resume", SID, "--settings", PATH]);
+    expect(relaunchArgv(["-p", "--input-format", "stream-json"], SID, PATH, null)).toEqual([
+      "-p",
+      "--input-format",
+      "stream-json",
+      "--resume",
+      SID,
+      "--settings",
+      PATH,
+    ]);
     expect(relaunchArgv([], SID, PATH, "-x")).toEqual(["--resume", SID, "--settings", PATH, "--", "-x"]);
   });
 });

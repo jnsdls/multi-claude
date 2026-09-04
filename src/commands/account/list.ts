@@ -37,9 +37,15 @@ function windowCell(w: Window | null | undefined, now: number): string {
 
 /** Per-model weekly Windows: `Opus 12% ↻ in 2d Sonnet 4% ↻ in 2d`, or `-` when none. */
 function modelWindowsCell(record: AccountRecord, now: number): string {
-  const scoped = (record.usage.lastGood?.limits ?? []).filter((l) => l.kind === "weekly_scoped" && l.scope?.model?.display_name);
+  const scoped = (record.usage.lastGood?.limits ?? []).filter(
+    (l) => l.kind === "weekly_scoped" && l.scope?.model?.display_name,
+  );
   if (scoped.length === 0) return "-";
-  return scoped.map((l) => `${l.scope!.model!.display_name} ${windowCell({ utilization: l.percent, resets_at: l.resets_at }, now)}`).join(" ");
+  return scoped
+    .map(
+      (l) => `${l.scope!.model!.display_name} ${windowCell({ utilization: l.percent, resets_at: l.resets_at }, now)}`,
+    )
+    .join(" ");
 }
 
 /** One table row's cells, in COLUMNS order. Pure. */
@@ -86,7 +92,12 @@ export function renderTable(rows: string[][]): string {
   const all = [[...COLUMNS], ...rows];
   const widths = COLUMNS.map((_, i) => Math.max(...all.map((r) => (r[i] ?? "").length)));
   return all
-    .map((r) => r.map((cell, i) => (i === r.length - 1 ? cell : cell.padEnd(widths[i]!))).join("  ").trimEnd())
+    .map((r) =>
+      r
+        .map((cell, i) => (i === r.length - 1 ? cell : cell.padEnd(widths[i]!)))
+        .join("  ")
+        .trimEnd(),
+    )
     .join("\n");
 }
 
@@ -111,7 +122,9 @@ async function refreshRecords(records: AccountRecord[]): Promise<AccountRecord[]
     due.push(r);
   }
   if (triggerSkipped.length > 0) {
-    warn(`claude is not on PATH and MCLAUDE_CLAUDE_PATH is unset, so the Refresh trigger was skipped for ${triggerSkipped.join(", ")}; the token is used as it is`);
+    warn(
+      `claude is not on PATH and MCLAUDE_CLAUDE_PATH is unset, so the Refresh trigger was skipped for ${triggerSkipped.join(", ")}; the token is used as it is`,
+    );
   }
   const results = await pollMany(due, { concurrency: LIST_CONCURRENCY, timeoutMs: LIST_TIMEOUT_MS, claudePath, now });
   const updated = new Map(results.map((p) => [p.record.id, p.record]));
@@ -156,7 +169,9 @@ export async function runList(args: string[]): Promise<number> {
     process.stdout.write(`${JSON.stringify(body, null, 2)}\n`);
     return EXIT.OK;
   }
-  const rows = sorted.map((r) => buildRow({ record: r, state: states.get(r.id)!, active: r.id === active, pinned: r.id === pinned }, now));
+  const rows = sorted.map((r) =>
+    buildRow({ record: r, state: states.get(r.id)!, active: r.id === active, pinned: r.id === pinned }, now),
+  );
   for (const id of orphans) rows.push(orphanRow(id));
   process.stdout.write(`${renderTable(rows)}\n`);
   return EXIT.OK;

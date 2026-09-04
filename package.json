@@ -23,8 +23,9 @@
     "extract:help": "bun run scripts/extract-claude-help.ts",
     "publish:npm": "sh scripts/publish-npm.sh",
     "publish:brew": "sh scripts/publish-brew.sh",
-    "lint": "biome lint .",
-    "check": "bun run lint && bun run typecheck && bun run test"
+    "lint": "biome check .",
+    "check": "bun run lint && bun run typecheck && bun run test",
+    "format": "biome format --write ."
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",

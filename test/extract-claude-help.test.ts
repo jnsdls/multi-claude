@@ -102,7 +102,12 @@ describe("driftBetween", () => {
     expect(d.installed).toBe("2.1.300");
   });
   test("added and removed names are listed in the report", () => {
-    const d = driftBetween(fixture, { version: "2.1.300", flags: ["--bg", "--new"], commands: ["doctor"], flagArity: {} });
+    const d = driftBetween(fixture, {
+      version: "2.1.300",
+      flags: ["--bg", "--new"],
+      commands: ["doctor"],
+      flagArity: {},
+    });
     expect(hasDrift(d)).toBe(true);
     expect(d.flags).toEqual({ added: ["--new"], removed: ["--model"] });
     expect(d.commands).toEqual({ added: [], removed: ["mcp"] });

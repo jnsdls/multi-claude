@@ -23,9 +23,26 @@ async function deadPid(): Promise<number> {
 
 describe("account add", () => {
   test("a successful add: dir before login, farm, seed, Record, active, one stdout line", async () => {
-    writeFileSync(join(h.home, ".claude.json"), JSON.stringify({ theme: "light", numStartups: 3, oauthAccount: { accountUuid: "shared" }, projects: { "/p": { hasTrustDialogAccepted: true, lastCost: 1 } } }));
+    writeFileSync(
+      join(h.home, ".claude.json"),
+      JSON.stringify({
+        theme: "light",
+        numStartups: 3,
+        oauthAccount: { accountUuid: "shared" },
+        projects: { "/p": { hasTrustDialogAccepted: true, lastCost: 1 } },
+      }),
+    );
     mkdirSync(join(h.sharedHome, "plugins"));
-    h.scenario({ login: { oauthAccount: { accountUuid: "acc-1", emailAddress: "me@example.com", organizationUuid: "org-1", organizationName: "Org" } } });
+    h.scenario({
+      login: {
+        oauthAccount: {
+          accountUuid: "acc-1",
+          emailAddress: "me@example.com",
+          organizationUuid: "org-1",
+          organizationName: "Org",
+        },
+      },
+    });
     const r = await h.run(["account", "add"]);
     expect(r.exitCode).toBe(0);
     const [id] = ids(h);
@@ -56,7 +73,13 @@ describe("account add", () => {
     expect(rec.alias).toBe("me@example.com");
     expect(rec.disabled).toBe(false);
     expect(rec.addedAt).toMatch(/^\d{4}-\d\d-\d\dT.*Z$/);
-    expect(rec.identity).toMatchObject({ accountUuid: "acc-1", organizationUuid: "org-1", email: "me@example.com", organizationName: "Org", subscriptionType: "max" });
+    expect(rec.identity).toMatchObject({
+      accountUuid: "acc-1",
+      organizationUuid: "org-1",
+      email: "me@example.com",
+      organizationName: "Org",
+      subscriptionType: "max",
+    });
     expect(rec.identity.capturedAt).toMatch(/Z$/);
     // The one poll after login went to a closed port: attempted, nothing read.
     expect(rec.usage).toMatchObject({ lastGood: null, fetchedAt: null, backoffUntil: null, last429At: null });
@@ -68,7 +91,17 @@ describe("account add", () => {
 
   test("the second Account does not become Active and takes the given alias", async () => {
     const first = h.plantAccount({ active: true });
-    h.scenario({ login: { oauthAccount: { accountUuid: "acc-2", emailAddress: "two@example.com", organizationUuid: "org-2", organizationName: "Org" }, subscriptionType: "pro" } });
+    h.scenario({
+      login: {
+        oauthAccount: {
+          accountUuid: "acc-2",
+          emailAddress: "two@example.com",
+          organizationUuid: "org-2",
+          organizationName: "Org",
+        },
+        subscriptionType: "pro",
+      },
+    });
     const r = await h.run(["account", "add", "work"]);
     expect(r.exitCode).toBe(0);
     expect(h.readActive()).toBe(first);
@@ -81,7 +114,13 @@ describe("account add", () => {
     h.scenario({});
     const r = await h.run(["account", "add", "--email", "x@y.z", "--sso"]);
     expect(r.exitCode).toBe(0);
-    expect(h.calls().find((c) => c.kind === "auth login")!.argv).toEqual(["auth", "login", "--email", "x@y.z", "--sso"]);
+    expect(h.calls().find((c) => c.kind === "auth login")!.argv).toEqual([
+      "auth",
+      "login",
+      "--email",
+      "x@y.z",
+      "--sso",
+    ]);
     const bad = await h.run(["account", "add", "--console"]);
     expect(bad.exitCode).toBe(64);
     expect(h.calls().filter((c) => c.kind === "auth login")).toHaveLength(1);
@@ -114,7 +153,16 @@ describe("account add", () => {
 
   test("a duplicate identity exits 65 naming the existing Alias and leaves no dir", async () => {
     const id = h.plantAccount({ alias: "work", accountUuid: "acc-1", organizationUuid: "org-1" });
-    h.scenario({ login: { oauthAccount: { accountUuid: "acc-1", emailAddress: "other@example.com", organizationUuid: "org-1", organizationName: "Org" } } });
+    h.scenario({
+      login: {
+        oauthAccount: {
+          accountUuid: "acc-1",
+          emailAddress: "other@example.com",
+          organizationUuid: "org-1",
+          organizationName: "Org",
+        },
+      },
+    });
     const r = await h.run(["account", "add"]);
     expect(r.exitCode).toBe(65);
     expect(r.stderr).toContain("work");
@@ -125,7 +173,16 @@ describe("account add", () => {
 
   test("the same person in another organization is a second Account", async () => {
     h.plantAccount({ accountUuid: "acc-1", organizationUuid: "org-1", email: "me@example.com" });
-    h.scenario({ login: { oauthAccount: { accountUuid: "acc-1", emailAddress: "me@example.com", organizationUuid: "org-2", organizationName: "Other" } } });
+    h.scenario({
+      login: {
+        oauthAccount: {
+          accountUuid: "acc-1",
+          emailAddress: "me@example.com",
+          organizationUuid: "org-2",
+          organizationName: "Other",
+        },
+      },
+    });
     const r = await h.run(["account", "add", "other"]);
     expect(r.exitCode).toBe(0);
     expect(ids(h)).toHaveLength(2);
@@ -149,7 +206,17 @@ describe("account add", () => {
 describe("account login", () => {
   test("logs in again in place keeping id and Alias", async () => {
     const id = h.plantAccount({ alias: "work", accountUuid: "acc-1", organizationUuid: "org-1", credential: null });
-    h.scenario({ login: { oauthAccount: { accountUuid: "acc-1", emailAddress: "new@example.com", organizationUuid: "org-1", organizationName: "Org" }, subscriptionType: "team" } });
+    h.scenario({
+      login: {
+        oauthAccount: {
+          accountUuid: "acc-1",
+          emailAddress: "new@example.com",
+          organizationUuid: "org-1",
+          organizationName: "Org",
+        },
+        subscriptionType: "team",
+      },
+    });
     const r = await h.run(["account", "login", "work"]);
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe(`work ${id} new@example.com team\n`);
@@ -163,7 +230,16 @@ describe("account login", () => {
 
   test("a changed identity exits 65 and is logged out again; the Record stays", async () => {
     const id = h.plantAccount({ alias: "work", accountUuid: "acc-1", organizationUuid: "org-1" });
-    h.scenario({ login: { oauthAccount: { accountUuid: "acc-9", emailAddress: "x@example.com", organizationUuid: "org-1", organizationName: "Org" } } });
+    h.scenario({
+      login: {
+        oauthAccount: {
+          accountUuid: "acc-9",
+          emailAddress: "x@example.com",
+          organizationUuid: "org-1",
+          organizationName: "Org",
+        },
+      },
+    });
     const r = await h.run(["account", "login", id]);
     expect(r.exitCode).toBe(65);
     expect(h.calls().at(-1)!.kind).toBe("auth logout");
@@ -189,7 +265,12 @@ describe("account list", () => {
     const old = h.plantAccount({ alias: "old", addedAt: "2026-01-01T00:00:00.000Z" });
     const active = h.plantAccount({ alias: "act", addedAt: "2026-03-01T00:00:00.000Z", active: true });
     const gone = h.plantAccount({ alias: "gone", addedAt: "2026-02-01T00:00:00.000Z", credential: null });
-    const off = h.plantAccount({ alias: "off", addedAt: "2026-04-01T00:00:00.000Z", disabled: true, subscriptionType: "pro" });
+    const off = h.plantAccount({
+      alias: "off",
+      addedAt: "2026-04-01T00:00:00.000Z",
+      disabled: true,
+      subscriptionType: "pro",
+    });
     const dead = h.plantAccount({ alias: "dead", addedAt: "2026-05-01T00:00:00.000Z", expiresAt: 0 });
     h.setPinned(old);
     h.plantOrphan("orphan01");
@@ -197,11 +278,23 @@ describe("account list", () => {
     expect(r.exitCode).toBe(0);
     const lines = r.stdout.trimEnd().split("\n");
     expect(lines[0]).toMatch(/^\s+ALIAS\s+ID\s+PLAN\s+SESSION\s+WEEK\s+MODEL WINDOWS\s+AGE\s+STATE$/);
-    const rows = lines.slice(1).map((l) => l.replace(/^[*!]*/, "").trim().split(/\s{2,}/));
+    const rows = lines.slice(1).map((l) =>
+      l
+        .replace(/^[*!]*/, "")
+        .trim()
+        .split(/\s{2,}/),
+    );
     expect(rows.map((c) => (c[0] === "-" ? c[1] : c[0]))).toEqual(["act", "old", "gone", "off", "dead", "orphan01"]);
     expect(lines[1]!.startsWith("*")).toBe(true);
     expect(lines[2]!.startsWith("!")).toBe(true);
-    expect(rows.map((c) => c.at(-1))).toEqual(["unknown", "unknown", "needs login", "disabled", "needs login", "orphan"]);
+    expect(rows.map((c) => c.at(-1))).toEqual([
+      "unknown",
+      "unknown",
+      "needs login",
+      "disabled",
+      "needs login",
+      "orphan",
+    ]);
     const offRow = rows[3]!;
     expect(offRow).toEqual(["off", off, "pro", "-", "-", "-", "-", "disabled"]);
     expect(r.stdout).toContain(active);
@@ -226,7 +319,14 @@ describe("account list", () => {
         lastGood: {
           five_hour: { utilization: 42, resets_at: soon },
           seven_day: { utilization: 7, resets_at: week },
-          limits: [{ kind: "weekly_scoped", percent: 12, resets_at: week, scope: { model: { id: null, display_name: "Opus" } } }],
+          limits: [
+            {
+              kind: "weekly_scoped",
+              percent: 12,
+              resets_at: week,
+              scope: { model: { id: null, display_name: "Opus" } },
+            },
+          ],
           extra_usage: { is_enabled: false },
         },
         fetchedAt: new Date(Date.now() - 5 * 60_000).toISOString(),

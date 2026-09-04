@@ -176,7 +176,11 @@ const APPROVAL_KEYS: readonly string[] = [...APPROVAL_BOOLEAN_KEYS, ...MCPJSON_L
  * rule as the sync with the source side winning. For Handoff, so the resumed
  * session opens without a trust dialog. No Shared write.
  */
-export async function mergeProjectApprovals(sourceAccountDir: string, targetAccountDir: string, projectPath: string): Promise<void> {
+export async function mergeProjectApprovals(
+  sourceAccountDir: string,
+  targetAccountDir: string,
+  projectPath: string,
+): Promise<void> {
   try {
     const source = readClaudeJson(accountClaudeJson(sourceAccountDir));
     const entry = source ? projectsOf(source)[projectPath] : undefined;

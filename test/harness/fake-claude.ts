@@ -141,7 +141,10 @@ if (argv[0] === "auth") {
 }
 
 // The Refresh trigger: -p with ANTHROPIC_BASE_URL at a closed port.
-if ((argv.includes("-p") || argv.includes("--print")) && process.env.ANTHROPIC_BASE_URL?.startsWith("http://127.0.0.1:")) {
+if (
+  (argv.includes("-p") || argv.includes("--print")) &&
+  process.env.ANTHROPIC_BASE_URL?.startsWith("http://127.0.0.1:")
+) {
   const mode = scenario.refresh ?? "unchanged";
   if (configDir) {
     const credPath = join(configDir, ".credentials.json");
@@ -230,7 +233,9 @@ async function runHooks() {
     }
     let settings: any;
     try {
-      settings = settingsPath.trim().startsWith("{") ? JSON.parse(settingsPath) : JSON.parse(readFileSync(settingsPath, "utf8"));
+      settings = settingsPath.trim().startsWith("{")
+        ? JSON.parse(settingsPath)
+        : JSON.parse(readFileSync(settingsPath, "utf8"));
     } catch (e) {
       save({ hookError: `settings unreadable: ${(e as Error).message}` });
       continue;
@@ -246,7 +251,8 @@ async function runHooks() {
     };
     let ran = 0;
     for (const entry of entries) {
-      if (entry.matcher && h.event === "StopFailure" && !new RegExp(entry.matcher).test(String(payload.error ?? ""))) continue;
+      if (entry.matcher && h.event === "StopFailure" && !new RegExp(entry.matcher).test(String(payload.error ?? "")))
+        continue;
       for (const hook of entry.hooks ?? []) {
         if (hook.type !== "command") continue;
         const p = Bun.spawn(["sh", "-c", hook.command], { stdin: "pipe", stdout: "ignore", stderr: "ignore" });

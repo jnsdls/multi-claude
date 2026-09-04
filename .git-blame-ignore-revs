@@ -1,0 +1,3 @@
+# git config blame.ignoreRevsFile .git-blame-ignore-revs
+# Biome formatter turned on; every file reformatted (#73)
+309dc7a555adccb13b5f41fe0581141593608062

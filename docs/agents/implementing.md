@@ -9,7 +9,8 @@ bun install
 bun run build          # dist/main.js; the tests spawn it under bun
 bun test               # after a build; `bun run test` builds first
 bun run typecheck      # tsc --noEmit
-bun run lint           # biome lint; `bun run check` runs all three
+bun run lint           # biome check: lint and format; `bun run format` rewrites
+bun run check          # lint, typecheck, build, test
 ```
 
 ## Module map
