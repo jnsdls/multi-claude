@@ -458,16 +458,20 @@ export async function spawnOn(
   await syncPreferences(chosen.dir);
   if (chosen.makeActive) writeActiveId(chosen.record.id);
   const env = buildChildEnv({ accountDir: chosen.dir, accountId: chosen.record.id, limitDir: opts.limitDir });
-  const releaseMarker = writeRunMarker(chosen.dir);
-  const child = spawnClaude(ctx.claudePath, {
-    argv,
-    env,
-    cwd: opts.cwd,
-    stdin: opts.stdin ?? "inherit",
-  });
-  opts.onSpawn?.(child);
+  // The forwarder goes on before the marker and the spawn, so a signal landing
+  // in between is held for the child instead of killing mclaude with the
+  // marker still on disk.
+  let child: Subprocess | undefined;
   const stopForwarding = forwardSignals(() => child);
+  const releaseMarker = writeRunMarker(chosen.dir);
   try {
+    child = spawnClaude(ctx.claudePath, {
+      argv,
+      env,
+      cwd: opts.cwd,
+      stdin: opts.stdin ?? "inherit",
+    });
+    opts.onSpawn?.(child);
     await child.exited;
   } finally {
     stopForwarding();

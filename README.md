@@ -186,3 +186,7 @@ Anthropic's Consumer Terms bar access through automated means outside an API key
 - [Logging in to your Claude account](https://support.claude.com/en/articles/13189465-logging-in-to-your-claude-account), "Authenticating to subscription plans"
 
 Team and Enterprise members should check with their admin. An organization can pin which login Claude Code accepts, and its policy governs the seat above anything mclaude does.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

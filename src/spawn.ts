@@ -26,18 +26,33 @@ export const FORWARDED_SIGNALS: ForwardedSignal[] = ["SIGTERM", "SIGHUP"];
 
 /**
  * Forwards SIGTERM and SIGHUP to whichever child `current()` returns, so a
- * Handoff can replace the child without re-registering. Returns a disposer.
+ * Handoff can replace the child without re-registering. A signal that arrives
+ * while `current()` is undefined waits for the next child and lands on it.
+ * Returns a disposer.
  */
 export function forwardSignals(current: () => Subprocess | undefined): () => void {
+  const waiting = new Set<ReturnType<typeof setInterval>>();
+  const deliver = (c: Subprocess, sig: ForwardedSignal) => {
+    if (c.exitCode === null && c.signalCode === null) c.kill(sig);
+  };
   const handlers = FORWARDED_SIGNALS.map((sig) => {
     const h = () => {
       const c = current();
-      if (c && c.exitCode === null && c.signalCode === null) c.kill(sig);
+      if (c) return deliver(c, sig);
+      const t = setInterval(() => {
+        const next = current();
+        if (!next) return;
+        clearInterval(t);
+        waiting.delete(t);
+        deliver(next, sig);
+      }, 5);
+      waiting.add(t);
     };
     process.on(sig, h);
     return [sig, h] as const;
   });
   return () => {
+    for (const t of waiting) clearInterval(t);
     for (const [sig, h] of handlers) process.off(sig, h);
   };
 }
