@@ -9,6 +9,7 @@ import { resolveClaude } from "./claude-path.ts";
 import { loadConfigFile, resolveSettings, type Settings } from "./config.ts";
 import { buildChildEnv } from "./env.ts";
 import { EXIT, ExitError } from "./exit.ts";
+import { runHandoff } from "./handoff.ts";
 import type { Signal } from "./hook.ts";
 import { warn } from "./log.ts";
 import { accountDir } from "./paths.ts";
@@ -20,6 +21,7 @@ import { writeRunMarker } from "./runmarker.ts";
 import { exitLike, forwardSignals, runCaptured, spawnClaude } from "./spawn.ts";
 import { earliestWall, fallback, refreshOrder, select, type Selection } from "./selection.ts";
 import { cleanupSignalDir, injectSessionArgv, prepareSession, sessionIdFor, watchSignals, type SessionPlan } from "./signal.ts";
+import { startStdinPump, type StdinPump } from "./stdin-pump.ts";
 import { runSymlinkFarm } from "./symlink-farm.ts";
 import { pollAccount, pollMany } from "./usage.ts";
 import { compareVersions, parseVersion, VERSION, VERSION_FLOOR } from "./version.ts";
@@ -128,11 +130,13 @@ function chooseForPlainPassthrough(_ctx: LaunchContext): Chosen {
  * A Session start: the Version floor, Selection, then the Limit hook plumbing
  * around the spawn. The watcher starts before the child and stops after it;
  * the Signal dir dies with the launch, after any Limit still being recorded
- * has landed.
+ * has landed. The exit mirrored is the last child's: a Handoff replaces the
+ * child, and the one it killed must not end mclaude.
  */
 async function runSessionStart(ctx: LaunchContext): Promise<never> {
   await checkVersionFloor(ctx);
-  const chosen = await chooseForSessionStart(ctx);
+  const model = resolveRequestedModel(ctx.scan, process.env, process.cwd());
+  const chosen = await chooseForSessionStart(ctx, model);
   if (ctx.scan.bare || ctx.scan.safeMode) {
     warn(`${ctx.scan.bare ? "--bare" : "--safe-mode"} skips hooks, so Handoff is off for this launch`);
   }
@@ -140,20 +144,51 @@ async function runSessionStart(ctx: LaunchContext): Promise<never> {
   const injected = injectSessionArgv(ctx.forwarded, ctx.scan, plan.sessionId, plan.settingsPath, plan.userSettingsUnparseable);
   if (injected.warning) warn(injected.warning);
 
-  const live: LiveSession = { ctx, chosen, plan, sessionId: plan.sessionId, child: null };
+  const live: LiveSession = {
+    ctx,
+    chosen,
+    plan,
+    sessionId: plan.sessionId,
+    child: null,
+    model,
+    threshold: ctx.settings.switchThreshold,
+    handoffAllowed: true,
+    handingOff: false,
+    pump: isStreamJsonInput(ctx.scan) ? startStdinPump() : null,
+    ended: deferred(),
+    launch: (target, argv) => launchLive(live, target, argv),
+  };
   const watcher = watchSignals(plan.limitDir, {
     onSessionStart(signal) {
       const id = signal.payload.session_id;
       if (typeof id === "string" && id) live.sessionId = id;
     },
     async onLimit(signal) {
-      const record = await recordLimit(chosen.record.id, signal, { claudePath: ctx.claudePath, fallbackSessionId: live.sessionId });
-      if (record) await onLimitRecorded(signal, record, live);
+      // One Handoff per Signal: a second Signal from the dying child, and a late
+      // one from a child already replaced, are ignored.
+      if (live.handingOff) return;
+      if (signal.accountId && signal.accountId !== live.chosen.record.id) return;
+      // Up from the Signal on: host lines queue until the new child is up, or
+      // go back to this one when it is kept.
+      live.handingOff = true;
+      live.pump?.detach();
+      try {
+        const record = await recordLimit(live.chosen.record.id, signal, { claudePath: ctx.claudePath, fallbackSessionId: live.sessionId });
+        if (record && live.handoffAllowed) await onLimitRecorded(signal, record, live);
+        else if (live.child) live.pump?.attach(live.child);
+      } finally {
+        live.handingOff = false;
+        // The child's own exit was held back while the flag was up; release it now.
+        const child = live.child;
+        if (child && (child.exitCode !== null || child.signalCode !== null)) live.ended.resolve(child);
+      }
     },
   });
   let child: Subprocess;
   try {
-    child = await spawnOn(ctx, chosen, injected.argv, { limitDir: plan.limitDir, onSpawn: (c) => (live.child = c) });
+    const first = await live.launch(chosen, injected.argv);
+    live.pump?.attach(first);
+    child = await live.ended.promise;
   } finally {
     await watcher.stop();
     cleanupSignalDir(plan.limitDir);
@@ -161,28 +196,82 @@ async function runSessionStart(ctx: LaunchContext): Promise<never> {
   exitLike(child);
 }
 
-/** What a running Session start knows about itself; the Handoff seam reads it. */
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: unknown) => void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+/** What a running Session start knows about itself; Handoff reads and updates it. */
 export interface LiveSession {
   ctx: LaunchContext;
+  /** The Account the current child runs on; a Handoff moves it. */
   chosen: Chosen;
   plan: SessionPlan;
   /** The session id claude runs under, updated by every SessionStart Signal (so `/clear` keeps Handoff armed). */
   sessionId: string;
-  /** The claude child, once spawned. */
+  /** The current claude child, once spawned. */
   child: Subprocess | null;
+  /** The Requested model and Switch threshold the launch used; Handoff runs the same Selection. */
+  model: string | null;
+  threshold: number;
+  /** False under a Pin or Override (#60): the Limit is recorded and the child stays. */
+  handoffAllowed: boolean;
+  /** Up from a Limit Signal until the Handoff it started has finished or bailed. */
+  handingOff: boolean;
+  /** The stdin pump on the stream-json path; null when the child inherits stdin. */
+  pump: StdinPump | null;
+  /** Resolves with the child whose exit mclaude mirrors: the last one spawned. */
+  ended: Deferred<Subprocess>;
+  /** Spawns a child on an Account; resolves once it is up. Handoff relaunches through it. */
+  launch: (chosen: Chosen, argv: string[]) => Promise<Subprocess>;
 }
 
 /**
- * The Handoff seam (#58). Runs after a Limit Signal has been written to the
- * Record and the one usage request has named the Window. Handoff will run
- * Selection here (ADR 0007), end `live.child`, and relaunch through `spawnOn`
- * with `--resume live.sessionId` and the same `plan.limitDir`. Until then: nothing.
+ * One spawn of the session's child. Resolves with the running child. Its exit
+ * settles `ended` unless a Handoff is replacing it, in which case the child
+ * the Handoff spawns takes over that duty.
  */
-async function onLimitRecorded(_signal: Signal, _record: AccountRecord, _live: LiveSession): Promise<void> {}
+function launchLive(live: LiveSession, chosen: Chosen, argv: string[]): Promise<Subprocess> {
+  return new Promise<Subprocess>((resolve, reject) => {
+    spawnOn(live.ctx, chosen, argv, {
+      limitDir: live.plan.limitDir,
+      stdin: live.pump ? "pipe" : "inherit",
+      onSpawn: (child) => {
+        live.child = child;
+        live.chosen = chosen;
+        resolve(child);
+      },
+    }).then(
+      (child) => {
+        if (!live.handingOff && live.child === child) live.ended.resolve(child);
+      },
+      (error) => {
+        reject(error);
+        live.ended.reject(error);
+      },
+    );
+  });
+}
+
+/** The Handoff seam: Selection, the kill, the relaunch with `--resume` and the resend (ADR 0007, ADR 0009). */
+async function onLimitRecorded(signal: Signal, record: AccountRecord, live: LiveSession): Promise<void> {
+  await runHandoff(signal, record, live);
+}
 
 /** Override, then Pin, then Selection. */
-async function chooseForSessionStart(ctx: LaunchContext): Promise<Chosen> {
-  return chooseBySelection(ctx);
+async function chooseForSessionStart(ctx: LaunchContext, model: string | null): Promise<Chosen> {
+  return chooseBySelection(ctx, model);
 }
 
 /**
@@ -208,12 +297,11 @@ export function activeNeedsPoll(record: AccountRecord, model: string | null, thr
  * when Selection says leave, the candidates get theirs, then Selection runs
  * again over what came back. Nothing is polled once claude is running.
  */
-async function chooseBySelection(ctx: LaunchContext): Promise<Chosen> {
+async function chooseBySelection(ctx: LaunchContext, model: string | null): Promise<Chosen> {
   let records = listRecords();
   if (records.length === 0) {
     throw new ExitError(EXIT.REFUSED, "no Active account. Run `mclaude account add` to log in to one");
   }
-  const model = resolveRequestedModel(ctx.scan, process.env, process.cwd());
   const threshold = ctx.settings.switchThreshold;
   const activeId = readActiveId();
   const now = Date.now();
@@ -290,14 +378,16 @@ export async function checkVersionFloor(ctx: LaunchContext): Promise<void> {
 }
 
 /**
- * Spawns claude on the chosen Account with inherited stdio and resolves with
- * the exited child, so the caller can clean up before mirroring its exit.
+ * Spawns claude on the chosen Account with inherited stdio (a piped stdin on
+ * the stream-json path, ADR 0006) and resolves with the exited child, so the
+ * caller can clean up before mirroring its exit. The Run marker lives for the
+ * spawn and goes with it.
  */
 export async function spawnOn(
   ctx: LaunchContext,
   chosen: Chosen,
   argv: string[],
-  opts: { limitDir: string | undefined; cwd?: string; onSpawn?: (child: Subprocess) => void },
+  opts: { limitDir: string | undefined; cwd?: string; stdin?: "inherit" | "pipe"; onSpawn?: (child: Subprocess) => void },
 ): Promise<Subprocess> {
   if (!existsSync(chosen.dir)) {
     throw new ExitError(EXIT.REFUSED, `Account dir for ${chosen.record.alias} (${chosen.record.id}) is missing`);
@@ -311,7 +401,7 @@ export async function spawnOn(
     argv,
     env,
     cwd: opts.cwd,
-    stdin: isStreamJsonInput(ctx.scan) ? "inherit" : "inherit",
+    stdin: opts.stdin ?? "inherit",
   });
   opts.onSpawn?.(child);
   const stopForwarding = forwardSignals(() => child);

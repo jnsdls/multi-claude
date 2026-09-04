@@ -280,3 +280,65 @@ export function removeValueFlag(argv: readonly string[], flag: string): string[]
   }
   return out;
 }
+
+/** The flags a Handoff relaunch replaces: the session is named by `--resume` and the settings file by the plan. */
+const RELAUNCH_DROPPED_VALUE_FLAGS = ["--session-id", "--settings"];
+const RELAUNCH_DROPPED_BOOL_FLAGS = new Set(["-c", "--continue"]);
+
+/**
+ * The argv a Handoff relaunch hands claude: the user's tokens minus anything
+ * that names a session or the settings file, minus the prompt already in the
+ * transcript, then `--resume <id> --settings <path>` and the resend as the
+ * positional prompt (none on the stream-json path, where stdin carries it).
+ *
+ * A positional is dropped only when the token before it is not an unknown
+ * flag, because `--add-dir /x` is a flag with a value mclaude does not know
+ * and `/x` must stay. Everything after a bare `--` is prompt text and goes.
+ */
+export function relaunchArgv(forwarded: readonly string[], sessionId: string, settingsPath: string, prompt: string | null): string[] {
+  let argv: string[] = [...forwarded];
+  for (const flag of RELAUNCH_DROPPED_VALUE_FLAGS) argv = removeValueFlag(argv, flag);
+  const out: string[] = [];
+  let prevUnknownFlag = false;
+  let i = 0;
+  while (i < argv.length) {
+    const tok = argv[i]!;
+    if (tok === "--") break;
+    const isFlag = tok.startsWith("-") && tok !== "-";
+    const name = tok.startsWith("--") && tok.includes("=") ? tok.slice(0, tok.indexOf("=")) : tok;
+    if (!isFlag) {
+      if (prevUnknownFlag) out.push(tok);
+      prevUnknownFlag = false;
+      i += 1;
+      continue;
+    }
+    if (RELAUNCH_DROPPED_BOOL_FLAGS.has(name)) {
+      prevUnknownFlag = false;
+      i += 1;
+      continue;
+    }
+    if (SCAN_OPTIONAL_VALUE_FLAGS.has(name)) {
+      if (!tok.includes("=") && i + 1 < argv.length && !argv[i + 1]!.startsWith("-")) i += 1;
+      prevUnknownFlag = false;
+      i += 1;
+      continue;
+    }
+    out.push(tok);
+    if (SCAN_VALUE_FLAGS.has(name)) {
+      if (!tok.includes("=") && i + 1 < argv.length) {
+        out.push(argv[i + 1]!);
+        i += 1;
+      }
+      prevUnknownFlag = false;
+    } else {
+      prevUnknownFlag = !SCAN_BOOL_FLAGS.has(name) && !tok.includes("=");
+    }
+    i += 1;
+  }
+  out.push("--resume", sessionId, "--settings", settingsPath);
+  if (prompt !== null) {
+    if (prompt.startsWith("-")) out.push("--");
+    out.push(prompt);
+  }
+  return out;
+}

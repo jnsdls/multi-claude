@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { classify, classifyMode, removeValueFlag, scanArgv, stripOwnFlags } from "../src/argv.ts";
+import { classify, classifyMode, relaunchArgv, removeValueFlag, scanArgv, stripOwnFlags } from "../src/argv.ts";
 
 describe("classifyMode", () => {
   test("reserved words", () => {
@@ -104,5 +104,36 @@ describe("removeValueFlag", () => {
       "--settings",
       "c",
     ]);
+  });
+});
+
+describe("relaunchArgv", () => {
+  const SID = "abc-123";
+  const PATH = "/limits/abc-123/settings.json";
+
+  test("keeps the user's flags, replaces the session and settings, appends the prompt", () => {
+    expect(relaunchArgv(["--model", "opus", "--session-id", "old", "--settings", "/user.json"], SID, PATH, "again")).toEqual([
+      "--model", "opus", "--resume", SID, "--settings", PATH, "again",
+    ]);
+  });
+
+  test("drops the prompt already in the transcript, after -p and after a bare --", () => {
+    expect(relaunchArgv(["-p", "hi", "--model=opus"], SID, PATH, "again")).toEqual(["-p", "--model=opus", "--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["hi there"], SID, PATH, "again")).toEqual(["--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["--model", "opus", "--", "hi", "--not-a-flag"], SID, PATH, "again")).toEqual(["--model", "opus", "--resume", SID, "--settings", PATH, "again"]);
+  });
+
+  test("a value after an unknown flag stays", () => {
+    expect(relaunchArgv(["--add-dir", "/x", "--verbose"], SID, PATH, "again")).toEqual(["--add-dir", "/x", "--verbose", "--resume", SID, "--settings", PATH, "again"]);
+  });
+
+  test("the user's --resume, -r, --continue and -c go, with their values", () => {
+    expect(relaunchArgv(["--resume", "old", "-p"], SID, PATH, "again")).toEqual(["-p", "--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["-r", "--continue", "-c", "--resume=old"], SID, PATH, "again")).toEqual(["--resume", SID, "--settings", PATH, "again"]);
+  });
+
+  test("no prompt on the stream-json path, and a prompt starting with a dash goes behind --", () => {
+    expect(relaunchArgv(["-p", "--input-format", "stream-json"], SID, PATH, null)).toEqual(["-p", "--input-format", "stream-json", "--resume", SID, "--settings", PATH]);
+    expect(relaunchArgv([], SID, PATH, "-x")).toEqual(["--resume", SID, "--settings", PATH, "--", "-x"]);
   });
 });

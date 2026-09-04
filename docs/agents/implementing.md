@@ -28,13 +28,16 @@ bunx tsc --noEmit      # typecheck
 | `src/windows.ts` | pure Window rules (applicable, tightest, fresh, stands, Unknown) and the polling constants |
 | `src/refresh.ts` | the Refresh trigger (ADR 0002) |
 | `src/hook.ts` | `mclaude hook` |
-| `src/launch.ts` | Passthrough: choose the Account, spawn, mirror exit |
+| `src/launch.ts` | Passthrough: choose the Account, spawn, mirror exit; `LiveSession` and the relaunch seam |
+| `src/handoff.ts` | Handoff: Selection at the wall, the kill, the relaunch with `--resume` and the resend |
+| `src/transcript.ts` | the resend rule over the transcript; pure |
+| `src/stdin-pump.ts` | the stream-json stdin pump: forward, queue during a swap, flush |
 | `src/commands/account/*.ts` | one file per `account` subcommand |
 | `src/commands/version.ts` | `mclaude version` |
 
 ## Test seams
 
-Pure rules get table tests (`test/argv.test.ts`, `test/record.test.ts`, `test/config.test.ts`, `test/windows.test.ts`, `test/usage-merge.test.ts`). Everything else drives the built `bin/mclaude` through `test/harness/harness.ts`:
+Pure rules get table tests (`test/argv.test.ts`, `test/record.test.ts`, `test/config.test.ts`, `test/windows.test.ts`, `test/usage-merge.test.ts`, `test/transcript.test.ts`). Everything else drives the built `bin/mclaude` through `test/harness/harness.ts`:
 
 - `new Harness()` makes a temp `HOME` (with `.claude/` and `.claude.json`), a temp `MCLAUDE_HOME`, and a fake claude.
 - `h.scenario({...})` scripts the fake claude (`test/harness/fake-claude.ts`): `--version` output, `auth login` outcome, refresh-trigger outcome, per-launch behaviour (exit code, sleep, hooks to fire from the `--settings` file, stdin echo, ignoring SIGTERM).
