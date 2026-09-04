@@ -21,6 +21,6 @@ The `release` workflow runs on the tag. Confirm on the run:
 
 - the version check passed (package.json equals the tag),
 - `gh release view v<version>` lists `mclaude-darwin-arm64.tar.gz`, `mclaude-darwin-x64.tar.gz`, `mclaude-linux-x64.tar.gz`, `mclaude-linux-arm64.tar.gz` and `SHASUMS256.txt`,
-- `npm view mclaude version` prints the new version.
+- `npm view multi-claude version` prints the new version.
 
-Requires the `NPM_TOKEN` repository secret (an npm automation token with publish rights on `mclaude`).
+Requires the `NPM_TOKEN` repository secret (an npm automation token with publish rights on `multi-claude`).

@@ -1,5 +1,5 @@
 {
-  "name": "mclaude",
+  "name": "multi-claude",
   "version": "0.1.0",
   "description": "Run Claude Code under the subscription account with headroom",
   "type": "module",

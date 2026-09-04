@@ -8,12 +8,12 @@ mclaude needs Claude Code installed. It finds `claude` through `MCLAUDE_CLAUDE_P
 
 ### npm or bun
 
-The npm package is a Bun program. Bun must be on `PATH` for the `mclaude` command to run, whichever package manager installed it.
+The npm package is `multi-claude` and installs the `mclaude` command. (The npm name `mclaude` belongs to an unrelated package.) It is a Bun program, so Bun must be on `PATH` for the command to run, whichever package manager installed it.
 
 ```sh
-npm install -g mclaude
-bun add -g mclaude
-bunx mclaude --version
+npm install -g multi-claude
+bun add -g multi-claude
+bunx multi-claude --version
 ```
 
 ### Release tarball
