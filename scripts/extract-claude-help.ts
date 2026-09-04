@@ -36,7 +36,11 @@ function arityOf(spec: string): FlagArity {
  * <tools...>` gives both names, each variadic; `plugin|plugins` gives both
  * commands.
  */
-export function parseHelpNames(help: string): { flags: string[]; commands: string[]; flagArity: Record<string, FlagArity> } {
+export function parseHelpNames(help: string): {
+  flags: string[];
+  commands: string[];
+  flagArity: Record<string, FlagArity>;
+} {
   const flags = new Set<string>();
   const commands = new Set<string>();
   const flagArity: Record<string, FlagArity> = {};
@@ -68,7 +72,11 @@ export function parseHelpNames(help: string): { flags: string[]; commands: strin
     }
   }
   const sortedFlags = [...flags].sort();
-  return { flags: sortedFlags, commands: [...commands].sort(), flagArity: Object.fromEntries(sortedFlags.map((f) => [f, flagArity[f]!])) };
+  return {
+    flags: sortedFlags,
+    commands: [...commands].sort(),
+    flagArity: Object.fromEntries(sortedFlags.map((f) => [f, flagArity[f]!])),
+  };
 }
 
 async function capture(claude: string, argv: string[]): Promise<string> {

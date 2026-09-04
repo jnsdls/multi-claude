@@ -9,20 +9,68 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 describe("injectSessionArgv", () => {
   const cases: [name: string, argv: string[], unparseable: boolean, expected: string[], warns: boolean][] = [
     ["a bare TUI start gets both flags last", [], false, ["--session-id", "s1", "--settings", SETTINGS], false],
-    ["a prompt keeps its order", ["-p", "hi", "--model", "opus"], false, ["-p", "hi", "--model", "opus", "--session-id", "s1", "--settings", SETTINGS], false],
-    ["--session-id from the user is kept and none is added", ["--session-id", "u1"], false, ["--session-id", "u1", "--settings", SETTINGS], false],
+    [
+      "a prompt keeps its order",
+      ["-p", "hi", "--model", "opus"],
+      false,
+      ["-p", "hi", "--model", "opus", "--session-id", "s1", "--settings", SETTINGS],
+      false,
+    ],
+    [
+      "--session-id from the user is kept and none is added",
+      ["--session-id", "u1"],
+      false,
+      ["--session-id", "u1", "--settings", SETTINGS],
+      false,
+    ],
     ["--session-id=value form", ["--session-id=u1"], false, ["--session-id=u1", "--settings", SETTINGS], false],
     ["--resume <id> adds no session id", ["--resume", "u1"], false, ["--resume", "u1", "--settings", SETTINGS], false],
     ["--resume with no value adds no session id", ["--resume"], false, ["--resume", "--settings", SETTINGS], false],
     ["-r short form", ["-r", "u1"], false, ["-r", "u1", "--settings", SETTINGS], false],
     ["--continue adds no session id", ["--continue"], false, ["--continue", "--settings", SETTINGS], false],
     ["-c short form", ["-c"], false, ["-c", "--settings", SETTINGS], false],
-    ["a user --settings path is replaced by the merged file", ["--settings", "my.json", "-p", "hi"], false, ["-p", "hi", "--session-id", "s1", "--settings", SETTINGS], false],
-    ["a user --settings=inline is replaced too", ["--settings={\"a\":1}"], false, ["--session-id", "s1", "--settings", SETTINGS], false],
-    ["every user --settings goes", ["--settings", "a.json", "--settings=b.json"], false, ["--session-id", "s1", "--settings", SETTINGS], false],
-    ["an unparseable user --settings is forwarded untouched and nothing is added for settings", ["--settings", "nope.json", "-p", "hi"], true, ["--settings", "nope.json", "-p", "hi", "--session-id", "s1"], true],
-    ["the flags land ahead of a bare --", ["-p", "--", "--weird"], false, ["-p", "--session-id", "s1", "--settings", SETTINGS, "--", "--weird"], false],
-    ["a --settings after a bare -- is a positional and stays", ["--", "--settings", "x"], false, ["--session-id", "s1", "--settings", SETTINGS, "--", "--settings", "x"], false],
+    [
+      "a user --settings path is replaced by the merged file",
+      ["--settings", "my.json", "-p", "hi"],
+      false,
+      ["-p", "hi", "--session-id", "s1", "--settings", SETTINGS],
+      false,
+    ],
+    [
+      "a user --settings=inline is replaced too",
+      ['--settings={"a":1}'],
+      false,
+      ["--session-id", "s1", "--settings", SETTINGS],
+      false,
+    ],
+    [
+      "every user --settings goes",
+      ["--settings", "a.json", "--settings=b.json"],
+      false,
+      ["--session-id", "s1", "--settings", SETTINGS],
+      false,
+    ],
+    [
+      "an unparseable user --settings is forwarded untouched and nothing is added for settings",
+      ["--settings", "nope.json", "-p", "hi"],
+      true,
+      ["--settings", "nope.json", "-p", "hi", "--session-id", "s1"],
+      true,
+    ],
+    [
+      "the flags land ahead of a bare --",
+      ["-p", "--", "--weird"],
+      false,
+      ["-p", "--session-id", "s1", "--settings", SETTINGS, "--", "--weird"],
+      false,
+    ],
+    [
+      "a --settings after a bare -- is a positional and stays",
+      ["--", "--settings", "x"],
+      false,
+      ["--session-id", "s1", "--settings", SETTINGS, "--", "--settings", "x"],
+      false,
+    ],
   ];
   for (const [name, argv, unparseable, expected, warns] of cases) {
     test(name, () => {
@@ -66,7 +114,10 @@ describe("hookSettings", () => {
   });
   test("user hooks stay ahead, other keys stay, the input is not mutated", () => {
     const mine = { type: "command", command: "echo hi" };
-    const user = { model: "opus", hooks: { StopFailure: [{ matcher: ".*", hooks: [mine] }], PreToolUse: [{ hooks: [mine] }] } };
+    const user = {
+      model: "opus",
+      hooks: { StopFailure: [{ matcher: ".*", hooks: [mine] }], PreToolUse: [{ hooks: [mine] }] },
+    };
     const before = JSON.stringify(user);
     const out = hookSettings(user, cmd) as any;
     expect(JSON.stringify(user)).toBe(before);

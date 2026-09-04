@@ -37,7 +37,7 @@ export function hookCommand(): string {
  * not a Limit (cux issue 39).
  */
 export function hookSettings(userSettings: object | null, command: string = hookCommand()): Record<string, unknown> {
-  const base: Record<string, unknown> = userSettings ? structuredClone(userSettings) as Record<string, unknown> : {};
+  const base: Record<string, unknown> = userSettings ? (structuredClone(userSettings) as Record<string, unknown>) : {};
   const hooks: Record<string, unknown> = isObject(base.hooks) ? base.hooks : {};
   const entry = { type: "command", command };
   const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
@@ -87,7 +87,11 @@ export interface SessionPlan {
  * (0600, rewritten every launch so the hook command never goes stale after an
  * upgrade or a move).
  */
-export function prepareSession(scan: Pick<Scan, "settings">, sessionId: string, cwd: string = process.cwd()): SessionPlan {
+export function prepareSession(
+  scan: Pick<Scan, "settings">,
+  sessionId: string,
+  cwd: string = process.cwd(),
+): SessionPlan {
   const user = scan.settings === undefined ? null : resolveUserSettings(scan.settings, cwd);
   const limitDir = signalDir(sessionId);
   mkdirSync(limitDir, { recursive: true, mode: 0o700 });
@@ -174,7 +178,11 @@ function parseSignal(text: string): Signal | null {
   try {
     const v = JSON.parse(text);
     if (!isObject(v) || !isObject(v.payload) || typeof v.receivedAt !== "string") return null;
-    return { payload: v.payload, accountId: typeof v.accountId === "string" ? v.accountId : null, receivedAt: v.receivedAt };
+    return {
+      payload: v.payload,
+      accountId: typeof v.accountId === "string" ? v.accountId : null,
+      receivedAt: v.receivedAt,
+    };
   } catch {
     return null;
   }
@@ -206,7 +214,9 @@ export function watchSignals(limitDir: string, handlers: SignalHandlers): Signal
     if (stopped) return;
     let names: string[];
     try {
-      names = readdirSync(limitDir).filter((n) => n.endsWith(".json") && !n.startsWith(".") && n !== "settings.json" && !seen.has(n)).sort();
+      names = readdirSync(limitDir)
+        .filter((n) => n.endsWith(".json") && !n.startsWith(".") && n !== "settings.json" && !seen.has(n))
+        .sort();
     } catch {
       return;
     }

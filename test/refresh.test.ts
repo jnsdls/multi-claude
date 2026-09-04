@@ -13,7 +13,11 @@ afterEach(() => h.cleanup());
 const SOON = () => Date.now() + 60_000;
 
 function lastCell(stdout: string, line = 1): string {
-  return stdout.split("\n")[line]!.trim().split(/\s{2,}/).at(-1)!;
+  return stdout
+    .split("\n")
+    [line]!.trim()
+    .split(/\s{2,}/)
+    .at(-1)!;
 }
 
 describe("the Refresh trigger on list --refresh", () => {
@@ -27,7 +31,16 @@ describe("the Refresh trigger on list --refresh", () => {
     const calls = h.calls();
     expect(calls.map((c) => c.kind)).toEqual(["refresh"]);
     const trigger = calls[0]!;
-    expect(trigger.argv).toEqual(["-p", "hi", "--max-turns", "1", "--no-session-persistence", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}']);
+    expect(trigger.argv).toEqual([
+      "-p",
+      "hi",
+      "--max-turns",
+      "1",
+      "--no-session-persistence",
+      "--strict-mcp-config",
+      "--mcp-config",
+      '{"mcpServers":{}}',
+    ]);
     expect(trigger.cwd).toBe(realpathSync(h.accountDir(id)));
     expect(trigger.env.ANTHROPIC_BASE_URL).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
     expect(trigger.env.CLAUDE_CODE_MAX_RETRIES).toBe("0");
@@ -49,7 +62,9 @@ describe("the Refresh trigger on list --refresh", () => {
   test("with no claude to run it, a due trigger is skipped with one line and the poll goes on", async () => {
     h.plantAccount({ alias: "a", expiresAt: SOON() });
     const usage = await h.startUsage({ default: { body: usageBody({ session: 33 }) } });
-    const r = await h.run(["account", "list", "--refresh"], { env: { MCLAUDE_CLAUDE_PATH: undefined, PATH: `${dirname(process.execPath)}:/usr/bin:/bin` } });
+    const r = await h.run(["account", "list", "--refresh"], {
+      env: { MCLAUDE_CLAUDE_PATH: undefined, PATH: `${dirname(process.execPath)}:/usr/bin:/bin` },
+    });
     expect(r.exitCode).toBe(0);
     expect(h.calls()).toHaveLength(0);
     expect(usage.requests).toHaveLength(1);
@@ -120,7 +135,17 @@ describe("the Refresh trigger on add", () => {
   test("runs before the first poll when the fresh login is already inside the margin", async () => {
     h.scenario({
       refresh: "advance",
-      login: { credential: { claudeAiOauth: { accessToken: "sk-ant-oat01-fake", refreshToken: "sk-ant-ort01-fake", expiresAt: SOON(), scopes: ["user:inference", "user:profile"], subscriptionType: "max" } } },
+      login: {
+        credential: {
+          claudeAiOauth: {
+            accessToken: "sk-ant-oat01-fake",
+            refreshToken: "sk-ant-ort01-fake",
+            expiresAt: SOON(),
+            scopes: ["user:inference", "user:profile"],
+            subscriptionType: "max",
+          },
+        },
+      },
     });
     const usage = await h.startUsage({ default: { body: usageBody() } });
     const r = await h.run(["account", "add"]);

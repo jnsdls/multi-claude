@@ -1,8 +1,7 @@
 declare const MCLAUDE_VERSION: string;
 
 /** mclaude's own version, injected from package.json at build time. */
-export const VERSION: string =
-  typeof MCLAUDE_VERSION === "string" ? MCLAUDE_VERSION : "0.0.0-dev";
+export const VERSION: string = typeof MCLAUDE_VERSION === "string" ? MCLAUDE_VERSION : "0.0.0-dev";
 
 /** The Claude Code release a person last read the four tables against (ADR 0012). */
 export const CHECKED_VERSION = "2.1.259";

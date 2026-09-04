@@ -28,7 +28,10 @@ export function body(o: BodyOptions = {}): UsageBody {
       resets_at: resetsAt === undefined ? iso(72 * H) : resetsAt,
       scope: { model: { id: null, display_name: name } },
     })),
-    extra_usage: { is_enabled: o.credits ?? false, spend_limit_reached: o.spendLimitReached === undefined ? false : o.spendLimitReached },
+    extra_usage: {
+      is_enabled: o.credits ?? false,
+      spend_limit_reached: o.spendLimitReached === undefined ? false : o.spendLimitReached,
+    },
   };
 }
 

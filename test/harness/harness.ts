@@ -1,7 +1,16 @@
 // The process-seam harness: spawns the built dist/main.js with MCLAUDE_HOME in a
 // fresh temp dir, HOME pointing at a temp Shared home, MCLAUDE_CLAUDE_PATH at the
 // fake claude and MCLAUDE_USAGE_URL at a local usage server when one is started.
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, chmodSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  chmodSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startUsageServer, type UsageServer, type UsageScenario } from "./usage-server.ts";
@@ -106,7 +115,10 @@ export class Harness {
     mkdirSync(join(this.sharedHome, "projects"), { recursive: true });
     mkdirSync(this.mclaudeHome, { recursive: true, mode: 0o700 });
     mkdirSync(this.fakeState, { recursive: true });
-    writeFileSync(join(this.home, ".claude.json"), JSON.stringify({ theme: "dark", hasCompletedOnboarding: true, projects: {} }));
+    writeFileSync(
+      join(this.home, ".claude.json"),
+      JSON.stringify({ theme: "dark", hasCompletedOnboarding: true, projects: {} }),
+    );
     writeFileSync(join(this.sharedHome, "settings.json"), "{}\n");
     this.fakeClaude = join(this.root, "claude");
     writeFileSync(this.fakeClaude, `#!/bin/sh\nexec "${process.execPath}" "${FAKE_CLAUDE_TS}" "$@"\n`);
@@ -138,12 +150,24 @@ export class Harness {
 
   async run(
     args: string[],
-    opts: { env?: Record<string, string | undefined>; stdin?: string | "pipe" | "ignore"; cwd?: string; timeoutMs?: number } = {},
+    opts: {
+      env?: Record<string, string | undefined>;
+      stdin?: string | "pipe" | "ignore";
+      cwd?: string;
+      timeoutMs?: number;
+    } = {},
   ): Promise<RunResult> {
     const child = Bun.spawn([...BIN, ...args], {
       env: this.env(opts.env),
       cwd: opts.cwd ?? this.root,
-      stdin: opts.stdin === undefined ? "ignore" : opts.stdin === "pipe" ? "pipe" : opts.stdin === "ignore" ? "ignore" : new TextEncoder().encode(opts.stdin),
+      stdin:
+        opts.stdin === undefined
+          ? "ignore"
+          : opts.stdin === "pipe"
+            ? "pipe"
+            : opts.stdin === "ignore"
+              ? "ignore"
+              : new TextEncoder().encode(opts.stdin),
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -159,7 +183,10 @@ export class Harness {
   }
 
   /** Spawns mclaude and returns the process for tests that drive stdin or signals. */
-  spawn(args: string[], opts: { env?: Record<string, string | undefined>; cwd?: string; stdin?: "pipe" | "ignore" } = {}) {
+  spawn(
+    args: string[],
+    opts: { env?: Record<string, string | undefined>; cwd?: string; stdin?: "pipe" | "ignore" } = {},
+  ) {
     return Bun.spawn([...BIN, ...args], {
       env: this.env(opts.env),
       cwd: opts.cwd ?? this.root,
@@ -306,22 +333,41 @@ export class Harness {
 }
 
 /** A healthy usage body with the given percentages. */
-export function usageBody(o: {
-  session?: number;
-  week?: number;
-  sessionResetsAt?: string | null;
-  weekResetsAt?: string | null;
-  scoped?: { name: string; percent: number; resetsAt?: string | null }[];
-  credits?: boolean;
-  spendLimitReached?: boolean;
-} = {}): Record<string, unknown> {
-  const sessionReset = o.sessionResetsAt === undefined ? new Date(Date.now() + 3 * 3600_000).toISOString() : o.sessionResetsAt;
+export function usageBody(
+  o: {
+    session?: number;
+    week?: number;
+    sessionResetsAt?: string | null;
+    weekResetsAt?: string | null;
+    scoped?: { name: string; percent: number; resetsAt?: string | null }[];
+    credits?: boolean;
+    spendLimitReached?: boolean;
+  } = {},
+): Record<string, unknown> {
+  const sessionReset =
+    o.sessionResetsAt === undefined ? new Date(Date.now() + 3 * 3600_000).toISOString() : o.sessionResetsAt;
   const weekReset = o.weekResetsAt === undefined ? new Date(Date.now() + 3 * 86400_000).toISOString() : o.weekResetsAt;
   const session = o.session ?? 10;
   const week = o.week ?? 5;
   const limits: unknown[] = [
-    { kind: "session", group: "session", percent: session, severity: "normal", resets_at: sessionReset, scope: null, is_active: true },
-    { kind: "weekly_all", group: "weekly", percent: week, severity: "normal", resets_at: weekReset, scope: null, is_active: false },
+    {
+      kind: "session",
+      group: "session",
+      percent: session,
+      severity: "normal",
+      resets_at: sessionReset,
+      scope: null,
+      is_active: true,
+    },
+    {
+      kind: "weekly_all",
+      group: "weekly",
+      percent: week,
+      severity: "normal",
+      resets_at: weekReset,
+      scope: null,
+      is_active: false,
+    },
   ];
   for (const s of o.scoped ?? []) {
     limits.push({

@@ -29,7 +29,9 @@ function settings(path: string, body: unknown): void {
 describe("resolveRequestedModel", () => {
   test("--model wins over everything", () => {
     settings(join(cwd, ".claude", "settings.local.json"), { model: "haiku" });
-    expect(resolveRequestedModel({ model: "claude-opus-4-1" }, { ANTHROPIC_MODEL: "sonnet" }, cwd)).toBe("claude-opus-4-1");
+    expect(resolveRequestedModel({ model: "claude-opus-4-1" }, { ANTHROPIC_MODEL: "sonnet" }, cwd)).toBe(
+      "claude-opus-4-1",
+    );
   });
 
   test("ANTHROPIC_MODEL over the settings files", () => {

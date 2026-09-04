@@ -7,7 +7,14 @@ import { keychainServiceName } from "../../credential.ts";
 import { EXIT, ExitError } from "../../exit.ts";
 import { warn } from "../../log.ts";
 import { accountDir } from "../../paths.ts";
-import { clearActiveIfMatches, clearPinnedIfMatches, deleteRecord, listOrphans, listRecords, resolveAccount } from "../../record.ts";
+import {
+  clearActiveIfMatches,
+  clearPinnedIfMatches,
+  deleteRecord,
+  listOrphans,
+  listRecords,
+  resolveAccount,
+} from "../../record.ts";
 import { liveRunMarkers } from "../../runmarker.ts";
 import { claudeWithoutConfig, logoutInDir } from "./common.ts";
 

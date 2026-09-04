@@ -20,7 +20,14 @@ function staleReading() {
     lastGood: {
       five_hour: { utilization: 42, resets_at: ahead(2 * 3600_000) },
       seven_day: { utilization: 7, resets_at: ahead(3 * 86400_000) },
-      limits: [{ kind: "weekly_scoped", percent: 12, resets_at: ahead(3 * 86400_000), scope: { model: { id: null, display_name: "Opus" } } }],
+      limits: [
+        {
+          kind: "weekly_scoped",
+          percent: 12,
+          resets_at: ahead(3 * 86400_000),
+          scope: { model: { id: null, display_name: "Opus" } },
+        },
+      ],
       extra_usage: { is_enabled: false },
     },
     fetchedAt: ago(5 * 60_000),
@@ -29,14 +36,21 @@ function staleReading() {
 }
 
 function cells(stdout: string, line = 1): string[] {
-  return stdout.split("\n")[line]!.replace(/^[*!]*/, "").trim().split(/\s{2,}/);
+  return stdout
+    .split("\n")
+    [line]!.replace(/^[*!]*/, "")
+    .trim()
+    .split(/\s{2,}/);
 }
 
 /** Alias to STATE for every row, whatever the order. */
 function states(stdout: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const line of stdout.trimEnd().split("\n").slice(1)) {
-    const c = line.replace(/^[*!]*/, "").trim().split(/\s{2,}/);
+    const c = line
+      .replace(/^[*!]*/, "")
+      .trim()
+      .split(/\s{2,}/);
     out[c[0]!] = c.at(-1)!;
   }
   return out;
@@ -66,14 +80,39 @@ describe("list --refresh", () => {
 
   test("a healthy body with a scoped Window fills the table and the Record", async () => {
     const id = h.plantAccount({ alias: "a" });
-    await h.startUsage({ default: { body: usageBody({ session: 42, week: 7, scoped: [{ name: "Opus", percent: 12 }, { name: "Sonnet", percent: 3 }] }) } });
+    await h.startUsage({
+      default: {
+        body: usageBody({
+          session: 42,
+          week: 7,
+          scoped: [
+            { name: "Opus", percent: 12 },
+            { name: "Sonnet", percent: 3 },
+          ],
+        }),
+      },
+    });
     const r = await h.run(["account", "list", "--refresh"]);
     expect(r.exitCode).toBe(0);
     const row = cells(r.stdout);
-    expect(row).toEqual(["a", id, "max", "42% ↻ in 2h", "7% ↻ in 2d", "Opus 12% ↻ in 2d Sonnet 3% ↻ in 2d", "0s", "ok"]);
+    expect(row).toEqual([
+      "a",
+      id,
+      "max",
+      "42% ↻ in 2h",
+      "7% ↻ in 2d",
+      "Opus 12% ↻ in 2d Sonnet 3% ↻ in 2d",
+      "0s",
+      "ok",
+    ]);
     const rec = h.readRecord(id);
     expect(rec.usage.lastGood.five_hour.utilization).toBe(42);
-    expect(rec.usage.lastGood.limits.map((l: any) => l.kind)).toEqual(["session", "weekly_all", "weekly_scoped", "weekly_scoped"]);
+    expect(rec.usage.lastGood.limits.map((l: any) => l.kind)).toEqual([
+      "session",
+      "weekly_all",
+      "weekly_scoped",
+      "weekly_scoped",
+    ]);
     expect(rec.usage.lastGood.extra_usage).toEqual({ is_enabled: false, spend_limit_reached: false });
     expect(rec.usage.fetchedAt).toMatch(/Z$/);
     expect(rec.usage.lastAttemptAt).toBe(rec.usage.fetchedAt);
@@ -123,7 +162,9 @@ describe("list --refresh", () => {
     test(`a 429 with ${name} backs off ${seconds} s and keeps the Reading`, async () => {
       const id = h.plantAccount({ alias: "a", usage: staleReading() });
       const before = h.readRecord(id).usage;
-      await h.startUsage({ default: { status: 429, headers, body: { error: { type: "rate_limit_error", message: "Rate limited." } } } });
+      await h.startUsage({
+        default: { status: 429, headers, body: { error: { type: "rate_limit_error", message: "Rate limited." } } },
+      });
       const t0 = Date.now();
       const r = await h.run(["account", "list", "--refresh"]);
       expect(r.exitCode).toBe(0);
@@ -159,7 +200,9 @@ describe("list --refresh", () => {
   test("a non-JSON body and a 500 keep the Reading", async () => {
     const a = h.plantAccount({ alias: "a", usage: staleReading() });
     const b = h.plantAccount({ alias: "b", usage: staleReading() });
-    await h.startUsage({ byToken: { [`sk-ant-oat01-${a}`]: { body: "<html>" }, [`sk-ant-oat01-${b}`]: { status: 500, body: {} } } });
+    await h.startUsage({
+      byToken: { [`sk-ant-oat01-${a}`]: { body: "<html>" }, [`sk-ant-oat01-${b}`]: { status: 500, body: {} } },
+    });
     const r = await h.run(["account", "list", "--refresh"]);
     expect(r.exitCode).toBe(0);
     expect(h.readRecord(a).usage.lastGood.five_hour.utilization).toBe(42);
@@ -180,7 +223,15 @@ describe("list --refresh", () => {
   test("a token without the user:profile scope is never requested", async () => {
     h.plantAccount({
       alias: "setup",
-      credential: { claudeAiOauth: { accessToken: "sk-ant-oat01-x", refreshToken: "sk-ant-ort01-x", expiresAt: Date.now() + 3600_000, scopes: ["user:inference"], subscriptionType: "max" } },
+      credential: {
+        claudeAiOauth: {
+          accessToken: "sk-ant-oat01-x",
+          refreshToken: "sk-ant-ort01-x",
+          expiresAt: Date.now() + 3600_000,
+          scopes: ["user:inference"],
+          subscriptionType: "max",
+        },
+      },
     });
     const usage = await h.startUsage({ default: { body: usageBody() } });
     const r = await h.run(["account", "list", "--refresh"]);
@@ -247,7 +298,12 @@ describe("list without --refresh", () => {
   test("a passed Reset after a failed refresh shows unknown", async () => {
     h.plantAccount({
       usage: {
-        lastGood: { five_hour: { utilization: 42, resets_at: ago(60_000) }, seven_day: null, limits: [], extra_usage: { is_enabled: false } },
+        lastGood: {
+          five_hour: { utilization: 42, resets_at: ago(60_000) },
+          seven_day: null,
+          limits: [],
+          extra_usage: { is_enabled: false },
+        },
         fetchedAt: ago(3600_000),
         lastAttemptAt: ago(10_000),
       },
