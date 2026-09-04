@@ -12,9 +12,16 @@
 
 ## Tag and publish
 
+`main` takes no direct pushes and requires the `ci` check, so the bump goes through a PR and the tag follows the merge.
+
 ```sh
-npm version <patch|minor|major>   # bumps package.json, commits, tags v<version>
-git push --follow-tags
+git checkout -b release-<version>
+npm version <patch|minor|major> --no-git-tag-version   # bumps package.json only
+git commit -am "v<version>" && git push -u origin HEAD
+gh pr create --fill && gh pr merge --squash --auto
+# after the merge
+git checkout main && git pull
+git tag "v<version>" && git push origin "v<version>"
 ```
 
 The `release` workflow runs on the tag. Confirm on the run:
