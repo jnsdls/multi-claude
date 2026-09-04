@@ -1,5 +1,7 @@
 # On a v* tag: build, test, cross-compile the four binaries from one macOS
 # runner, attach them to a GitHub release with SHASUMS256.txt, publish to npm.
+# npm publish authenticates by OIDC (trusted publishing, id-token: write), so
+# there is no npm token. Provenance comes with it; the repo must be public.
 name: release
 
 on:
@@ -25,8 +27,11 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@latest
 
       - name: Check that package.json matches the tag
         run: |
@@ -57,6 +62,4 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" out/*.tar.gz out/SHASUMS256.txt --generate-notes
 
       - name: Publish to npm
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
