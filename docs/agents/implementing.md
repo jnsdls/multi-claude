@@ -1,12 +1,12 @@
 # Implementing mclaude
 
-The launcher lives in `src/`, one TypeScript program on Bun. `bin/mclaude` is the npm shim, `scripts/build.ts` builds `dist/main.js` and the compiled binaries.
+The launcher lives in `src/`, one TypeScript program on Bun. `scripts/build.ts` builds `dist/main.js` (what the tests run) and, with `--compile`, the four binaries plus an npm platform package for each under `npm/`. `bin/mclaude` is the npm launcher: a Node script that execs the binary from the platform package npm installed.
 
 ## Commands
 
 ```sh
 bun install
-bun run build          # dist/main.js; the tests spawn bin/mclaude, which needs it
+bun run build          # dist/main.js; the tests spawn it under bun
 bun test               # after a build; `bun run test` builds first
 bunx tsc --noEmit      # typecheck
 ```
@@ -37,7 +37,7 @@ bunx tsc --noEmit      # typecheck
 
 ## Test seams
 
-Pure rules get table tests (`test/argv.test.ts`, `test/record.test.ts`, `test/config.test.ts`, `test/windows.test.ts`, `test/usage-merge.test.ts`, `test/transcript.test.ts`). Everything else drives the built `bin/mclaude` through `test/harness/harness.ts`:
+Pure rules get table tests (`test/argv.test.ts`, `test/record.test.ts`, `test/config.test.ts`, `test/windows.test.ts`, `test/usage-merge.test.ts`, `test/transcript.test.ts`). Everything else drives the built `dist/main.js` through `test/harness/harness.ts`:
 
 - `new Harness()` makes a temp `HOME` (with `.claude/` and `.claude.json`), a temp `MCLAUDE_HOME`, and a fake claude.
 - `h.scenario({...})` scripts the fake claude (`test/harness/fake-claude.ts`): `--version` output, `auth login` outcome, refresh-trigger outcome, per-launch behaviour (exit code, sleep, hooks to fire from the `--settings` file, stdin echo, ignoring SIGTERM).

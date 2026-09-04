@@ -6,14 +6,13 @@
 
 mclaude needs Claude Code installed. It finds `claude` through `MCLAUDE_CLAUDE_PATH`, then `claudePath` in its config, then `PATH`, then `~/.local/bin/claude`.
 
-### npm or bun
+### npm
 
-The npm package is `multi-claude` and installs the `mclaude` command. (The npm name `mclaude` belongs to an unrelated package.) It is a Bun program, so Bun must be on `PATH` for the command to run, whichever package manager installed it.
+The npm package is `multi-claude` and installs the `mclaude` command. (The npm name `mclaude` belongs to an unrelated package.) It pulls in one platform package, `multi-claude-<os>-<cpu>`, that carries the compiled binary, so nothing beyond Node is needed to run it. An install with `--no-optional` skips that package and `mclaude` exits 69 saying so.
 
 ```sh
 npm install -g multi-claude
-bun add -g multi-claude
-bunx multi-claude --version
+npx multi-claude --version
 ```
 
 ### Release tarball

@@ -21,18 +21,26 @@ The `release` workflow runs on the tag. Confirm on the run:
 
 - the version check passed (package.json equals the tag),
 - `gh release view v<version>` lists `mclaude-darwin-arm64.tar.gz`, `mclaude-darwin-x64.tar.gz`, `mclaude-linux-x64.tar.gz`, `mclaude-linux-arm64.tar.gz` and `SHASUMS256.txt`,
-- `npm view multi-claude version` prints the new version.
+- `npm view multi-claude version` prints the new version, and so does each of `multi-claude-darwin-arm64`, `multi-claude-darwin-x64`, `multi-claude-linux-x64`, `multi-claude-linux-arm64`.
 
-The workflow publishes to npm by trusted publishing (OIDC), so no npm token is stored anywhere. npm only lets a trusted publisher be configured for a package that already exists, which makes the first release a one-off by hand:
+npm gets five packages: the four platform packages, each carrying one compiled binary, then `multi-claude`, whose `optionalDependencies` pin them at the same version (`npm version` keeps the pins in step through the `version` script). The workflow publishes by trusted publishing (OIDC), so no npm token is stored anywhere. npm only lets a trusted publisher be configured for a package that already exists, which makes the first release a one-off by hand:
 
 1. Make the repo public. npm refuses provenance from a private repo.
-2. From a clean checkout of `main`, `npm login`, then `npm publish --access public`.
-3. Register the workflow as the package's trusted publisher, with npm 11.15 or later:
+2. From a clean checkout of `main` on a Mac, `npm login`, then:
 
    ```sh
-   npm trust github multi-claude --repo jnsdls/multi-claude --file release.yml
+   bun run build:binaries      # cross-compiles all four and stages npm/
+   bun run publish:npm         # the four platform packages, then multi-claude
    ```
 
-   The same thing is available under Settings, Trusted publishing on the package's npm page. Then turn on "Require two-factor authentication and disallow tokens" under Publishing access, so the workflow is the only publisher.
+3. Register the workflow as each package's trusted publisher, with npm 11.15 or later:
+
+   ```sh
+   for p in multi-claude multi-claude-darwin-arm64 multi-claude-darwin-x64 multi-claude-linux-x64 multi-claude-linux-arm64; do
+     npm trust github "$p" --repo jnsdls/multi-claude --file release.yml
+   done
+   ```
+
+   The same setting is under Trusted publishing on each package's npm page. Then turn on "Require two-factor authentication and disallow tokens" under Publishing access on each, so the workflow is the only publisher.
 
 Every later release is the tag alone.
