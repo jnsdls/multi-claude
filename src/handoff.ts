@@ -34,18 +34,28 @@ export const TERMINAL_RESET = "\x1b[?1049l\x1b[?2004l\x1b[?1000l\x1b[?1002l\x1b[
  * takes the Unknown and Credits tiers of Fallback only, since the Reset tier
  * is the wall the child is already waiting at.
  */
-export function chooseHandoffTarget(live: LiveSession, records: AccountRecord[], now: number): { chosen: Chosen; reason: string | null } | null {
+export function chooseHandoffTarget(
+  live: LiveSession,
+  records: AccountRecord[],
+  now: number,
+): { chosen: Chosen; reason: string | null } | null {
   const current = live.chosen.record.id;
   const selection = select({ records, activeId: current, model: live.model, threshold: live.threshold, now });
   if (selection.kind === "move") {
-    return { chosen: { record: selection.record, dir: accountDir(selection.id), makeActive: true, source: "selection" }, reason: null };
+    return {
+      chosen: { record: selection.record, dir: accountDir(selection.id), makeActive: true, source: "selection" },
+      reason: null,
+    };
   }
   if (selection.kind !== "exhausted") return null;
   if (live.ctx.settings.onExhausted === "fail") return null;
   const fb = fallback(records, live.model, now);
   if (!fb || fb.record.id === current || fb.tier === "reset") return null;
   const reason = fb.tier === "unknown" ? "its usage is unknown" : "using extra usage credits";
-  return { chosen: { record: fb.record, dir: accountDir(fb.record.id), makeActive: false, source: "fallback" }, reason };
+  return {
+    chosen: { record: fb.record, dir: accountDir(fb.record.id), makeActive: false, source: "fallback" },
+    reason,
+  };
 }
 
 /** Polls the transcript's mtime until three consecutive readings agree, capped. A missing path just proceeds. */
@@ -142,7 +152,8 @@ export async function runHandoff(signal: Signal, live: LiveSession): Promise<voi
     live.pump?.attach(child);
     return;
   }
-  const transcriptPath = typeof signal.payload.transcript_path === "string" ? signal.payload.transcript_path : undefined;
+  const transcriptPath =
+    typeof signal.payload.transcript_path === "string" ? signal.payload.transcript_path : undefined;
   const cwd = typeof signal.payload.cwd === "string" ? signal.payload.cwd : process.cwd();
 
   await waitForTranscript(transcriptPath);
@@ -154,5 +165,8 @@ export async function runHandoff(signal: Signal, live: LiveSession): Promise<voi
   warn(`usage limit on ${from.record.alias}; continuing on ${target.chosen.record.alias}${tail}`);
   const argv = relaunchArgv(live.ctx.forwarded, live.sessionId, live.plan.settingsPath, live.pump ? null : resend.text);
   const next = await live.launch(target.chosen, argv);
-  live.pump?.attach(next, { first: resendLine(resend, live.pump.userLineFor(resend.text)), drop: (line) => userTextOfLine(line) === resend.text });
+  live.pump?.attach(next, {
+    first: resendLine(resend, live.pump.userLineFor(resend.text)),
+    drop: (line) => userTextOfLine(line) === resend.text,
+  });
 }

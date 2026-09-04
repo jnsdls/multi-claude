@@ -21,7 +21,15 @@ const NOW = Date.parse("2026-09-03T12:00:00.000Z");
 const iso = (offsetMs: number) => new Date(NOW + offsetMs).toISOString();
 const H = 3600_000;
 
-function body(o: { session?: number; week?: number; sessionReset?: string | null; weekReset?: string | null; scoped?: [string, number, string | null][] } = {}): UsageBody {
+function body(
+  o: {
+    session?: number;
+    week?: number;
+    sessionReset?: string | null;
+    weekReset?: string | null;
+    scoped?: [string, number, string | null][];
+  } = {},
+): UsageBody {
   return {
     five_hour: { utilization: o.session ?? 30, resets_at: o.sessionReset === undefined ? iso(2 * H) : o.sessionReset },
     seven_day: { utilization: o.week ?? 10, resets_at: o.weekReset === undefined ? iso(72 * H) : o.weekReset },
@@ -53,7 +61,12 @@ describe("constants", () => {
 });
 
 describe("applicableWindows", () => {
-  const b = body({ scoped: [["Opus", 40, iso(72 * H)], ["Sonnet", 5, iso(72 * H)]] });
+  const b = body({
+    scoped: [
+      ["Opus", 40, iso(72 * H)],
+      ["Sonnet", 5, iso(72 * H)],
+    ],
+  });
   const cases: [string, string | null, string[]][] = [
     ["unscoped only for a model no scoped Window names", "claude-haiku-4", ["five_hour", "seven_day"]],
     ["the scoped Window whose name is in the model string", "claude-opus-4-1", ["five_hour", "seven_day", "Opus"]],
@@ -78,7 +91,13 @@ describe("applicableWindows", () => {
     expect(applicableWindows(null, null, NOW)).toEqual([]);
   });
   test("a scoped entry of another kind or without a display name is ignored", () => {
-    const b2: UsageBody = { ...body(), limits: [{ kind: "weekly_all", percent: 99, resets_at: iso(H), scope: null }, { kind: "weekly_scoped", percent: 50, resets_at: iso(H), scope: { model: null } }] };
+    const b2: UsageBody = {
+      ...body(),
+      limits: [
+        { kind: "weekly_all", percent: 99, resets_at: iso(H), scope: null },
+        { kind: "weekly_scoped", percent: 50, resets_at: iso(H), scope: { model: null } },
+      ],
+    };
     expect(applicableWindows(b2, null, NOW).map((w) => w.name)).toEqual(["five_hour", "seven_day"]);
   });
 });
@@ -96,7 +115,11 @@ describe("maxUtilization, tightestWindow, earliestReset", () => {
     expect(earliestReset(w)).toBe(iso(2 * H));
   });
   test("a tie goes to the earliest Reset", () => {
-    const w = applicableWindows(body({ session: 50, week: 50, sessionReset: iso(5 * H), weekReset: iso(H) }), null, NOW);
+    const w = applicableWindows(
+      body({ session: 50, week: 50, sessionReset: iso(5 * H), weekReset: iso(H) }),
+      null,
+      NOW,
+    );
     expect(tightestWindow(w)!.name).toBe("seven_day");
   });
 });
@@ -145,10 +168,30 @@ describe("isUnknown", () => {
   const cases: [string, ReturnType<typeof usage>, boolean][] = [
     ["no Reading at all", usage({}), true],
     ["a Reading that stands", usage({ lastGood: body(), fetchedAt: iso(-3 * H), lastAttemptAt: iso(-3 * H) }), false],
-    ["every Reset passed, no attempt since", usage({ lastGood: sessionOnly(iso(-H)), fetchedAt: iso(-3 * H), lastAttemptAt: iso(-3 * H) }), true],
-    ["every Reset passed, a failed attempt since", usage({ lastGood: sessionOnly(iso(-H)), fetchedAt: iso(-3 * H), lastAttemptAt: iso(-10_000) }), true],
-    ["one Window passed while another stands", usage({ lastGood: body({ sessionReset: iso(-H) }), fetchedAt: iso(-3 * H), lastAttemptAt: iso(-10_000) }), false],
-    ["a hollow Reading", usage({ lastGood: body({ sessionReset: null, weekReset: null }), fetchedAt: iso(-10_000), lastAttemptAt: iso(-10_000) }), true],
+    [
+      "every Reset passed, no attempt since",
+      usage({ lastGood: sessionOnly(iso(-H)), fetchedAt: iso(-3 * H), lastAttemptAt: iso(-3 * H) }),
+      true,
+    ],
+    [
+      "every Reset passed, a failed attempt since",
+      usage({ lastGood: sessionOnly(iso(-H)), fetchedAt: iso(-3 * H), lastAttemptAt: iso(-10_000) }),
+      true,
+    ],
+    [
+      "one Window passed while another stands",
+      usage({ lastGood: body({ sessionReset: iso(-H) }), fetchedAt: iso(-3 * H), lastAttemptAt: iso(-10_000) }),
+      false,
+    ],
+    [
+      "a hollow Reading",
+      usage({
+        lastGood: body({ sessionReset: null, weekReset: null }),
+        fetchedAt: iso(-10_000),
+        lastAttemptAt: iso(-10_000),
+      }),
+      true,
+    ],
   ];
   for (const [name, u, expected] of cases) {
     test(name, () => {

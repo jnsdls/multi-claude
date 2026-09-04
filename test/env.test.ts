@@ -18,7 +18,12 @@ describe("buildChildEnv", () => {
       MCLAUDE_LIMIT_DIR: "/parent/limits",
       OTHER: "x",
     };
-    const env = buildChildEnv({ base, accountDir: "/h/.mclaude/accounts/abc", accountId: "abc", limitDir: "/h/.mclaude/limits/s" });
+    const env = buildChildEnv({
+      base,
+      accountDir: "/h/.mclaude/accounts/abc",
+      accountId: "abc",
+      limitDir: "/h/.mclaude/limits/s",
+    });
     expect(env.CLAUDECODE).toBeUndefined();
     expect(env.CLAUDE_CODE_SESSION_ID).toBeUndefined();
     expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined();
@@ -38,7 +43,11 @@ describe("buildChildEnv", () => {
     expect(env.MCLAUDE_USAGE_URL).toBeUndefined();
   });
   test("inherited mclaude variables never leak when not set", () => {
-    const env = buildChildEnv({ base: { MCLAUDE_LIMIT_DIR: "/x", CLAUDE_CONFIG_DIR: "/y" }, accountDir: "/a", accountId: "a" });
+    const env = buildChildEnv({
+      base: { MCLAUDE_LIMIT_DIR: "/x", CLAUDE_CONFIG_DIR: "/y" },
+      accountDir: "/a",
+      accountId: "a",
+    });
     expect(env.MCLAUDE_LIMIT_DIR).toBeUndefined();
     expect(env.CLAUDE_CONFIG_DIR).toBe("/a");
   });

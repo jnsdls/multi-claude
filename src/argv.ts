@@ -299,7 +299,12 @@ const RELAUNCH_DROPPED_FLAGS = new Set(["--session-id", "--settings", "--resume"
  * flag the table does not know is boolean. Everything after a bare `--` is
  * prompt text and goes.
  */
-export function relaunchArgv(forwarded: readonly string[], sessionId: string, settingsPath: string, prompt: string | null): string[] {
+export function relaunchArgv(
+  forwarded: readonly string[],
+  sessionId: string,
+  settingsPath: string,
+  prompt: string | null,
+): string[] {
   const out: string[] = [];
   let i = 0;
   while (i < forwarded.length) {
@@ -315,7 +320,8 @@ export function relaunchArgv(forwarded: readonly string[], sessionId: string, se
     const arity: FlagArity = eq >= 0 ? "none" : (CLAUDE_FLAG_ARITY[name] ?? "none");
     const values: string[] = [];
     if (arity === "one" && i + 1 < forwarded.length) values.push(forwarded[i + 1]!);
-    else if (arity === "optional" && i + 1 < forwarded.length && !forwarded[i + 1]!.startsWith("-")) values.push(forwarded[i + 1]!);
+    else if (arity === "optional" && i + 1 < forwarded.length && !forwarded[i + 1]!.startsWith("-"))
+      values.push(forwarded[i + 1]!);
     else if (arity === "variadic") {
       for (let j = i + 1; j < forwarded.length && !forwarded[j]!.startsWith("-"); j++) values.push(forwarded[j]!);
     }

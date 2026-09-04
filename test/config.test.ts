@@ -14,7 +14,10 @@ function code(fn: () => unknown): number | null {
 describe("parseConfig", () => {
   test("JSONC with comments and trailing commas", () => {
     const warns: string[] = [];
-    const c = parseConfig(`{ // comment\n "onExhausted": "fail", "switchThreshold": 80, "claudePath": "~/bin/claude", "version": 1, }`, (l) => warns.push(l));
+    const c = parseConfig(
+      `{ // comment\n "onExhausted": "fail", "switchThreshold": 80, "claudePath": "~/bin/claude", "version": 1, }`,
+      (l) => warns.push(l),
+    );
     expect(c).toEqual({ onExhausted: "fail", switchThreshold: 80, claudePath: "~/bin/claude" });
     expect(warns).toEqual([]);
   });
@@ -41,14 +44,20 @@ describe("resolveSettings", () => {
     expect(resolveSettings({}, {}, {}).switchThreshold).toBe(90);
     expect(resolveSettings({}, { switchThreshold: 70 }, {}).switchThreshold).toBe(70);
     expect(resolveSettings({}, { switchThreshold: 70 }, { MCLAUDE_SWITCH_THRESHOLD: "60" }).switchThreshold).toBe(60);
-    expect(resolveSettings({ switchThreshold: "50" }, { switchThreshold: 70 }, { MCLAUDE_SWITCH_THRESHOLD: "60" }).switchThreshold).toBe(50);
+    expect(
+      resolveSettings({ switchThreshold: "50" }, { switchThreshold: 70 }, { MCLAUDE_SWITCH_THRESHOLD: "60" })
+        .switchThreshold,
+    ).toBe(50);
     expect(resolveSettings({}, {}, {}).onExhausted).toBe("launch");
     expect(resolveSettings({}, { onExhausted: "fail" }, {}).onExhausted).toBe("fail");
     expect(resolveSettings({}, { onExhausted: "fail" }, { MCLAUDE_ON_EXHAUSTED: "launch" }).onExhausted).toBe("launch");
     expect(resolveSettings({ onExhausted: "fail" }, {}, { MCLAUDE_ON_EXHAUSTED: "launch" }).onExhausted).toBe("fail");
   });
   test("claudePath env beats file", () => {
-    expect(resolveSettings({}, { claudePath: "/a" }, { MCLAUDE_CLAUDE_PATH: "/b" }).claudePath).toEqual({ value: "/b", source: "env" });
+    expect(resolveSettings({}, { claudePath: "/a" }, { MCLAUDE_CLAUDE_PATH: "/b" }).claudePath).toEqual({
+      value: "/b",
+      source: "env",
+    });
     expect(resolveSettings({}, { claudePath: "/a" }, {}).claudePath).toEqual({ value: "/a", source: "config" });
   });
   test("bad flag values are usage errors", () => {

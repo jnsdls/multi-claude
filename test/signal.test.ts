@@ -110,7 +110,13 @@ describe("a Session start carries the Limit hook", () => {
     h.plantAccount({ active: true, usage: reading() });
     const mine = { type: "command", command: "echo mine" };
     const userPath = join(h.root, "user-settings.json");
-    writeFileSync(userPath, JSON.stringify({ model: "opus", hooks: { StopFailure: [{ matcher: ".*", hooks: [mine] }], Stop: [{ hooks: [mine] }] } }));
+    writeFileSync(
+      userPath,
+      JSON.stringify({
+        model: "opus",
+        hooks: { StopFailure: [{ matcher: ".*", hooks: [mine] }], Stop: [{ hooks: [mine] }] },
+      }),
+    );
     const { p, call } = await spawnLingering(["--settings", userPath, "-p", "hi"]);
     expect(call.argv.filter((a) => a === "--settings")).toHaveLength(1);
     expect(call.argv.slice(0, 2)).toEqual(["-p", "hi"]);
@@ -126,7 +132,11 @@ describe("a Session start carries the Limit hook", () => {
 
   test("a user --settings with inline JSON is merged the same way", async () => {
     h.plantAccount({ active: true, usage: reading() });
-    const { p, call } = await spawnLingering(["-p", "hi", `--settings={"permissions":{"allow":["Bash"]},"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"echo u"}]}]}}`]);
+    const { p, call } = await spawnLingering([
+      "-p",
+      "hi",
+      `--settings={"permissions":{"allow":["Bash"]},"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"echo u"}]}]}}`,
+    ]);
     expect(call.argv.filter((a) => a.startsWith("--settings"))).toHaveLength(1);
     const merged = JSON.parse(readFileSync(flag(call.argv, "--settings")!, "utf8"));
     expect(merged.permissions).toEqual({ allow: ["Bash"] });
@@ -217,7 +227,9 @@ describe("a rate_limit Signal records the Limit", () => {
       lastLimit: { reportedAt: ago(20_000), sessionId: "first", window: "five_hour", resetsAt },
     });
     const usage = await h.startUsage({ default: { body: usageBody({ session: 100 }) } });
-    h.scenario({ default: { hooks: [{ event: "StopFailure", payload: { error: "rate_limit", last_assistant_message: WALL } }] } });
+    h.scenario({
+      default: { hooks: [{ event: "StopFailure", payload: { error: "rate_limit", last_assistant_message: WALL } }] },
+    });
     const r = await h.run(["-p", "hi"]);
     expect(r.exitCode).toBe(0);
     expect(usage.requests).toHaveLength(0);
@@ -231,8 +243,23 @@ describe("a rate_limit Signal records the Limit", () => {
   test("a StopFailure with agent_id is a Limit", async () => {
     const a = h.plantAccount({ alias: "a", active: true, usage: reading({ session: 50 }) });
     const weekReset = ahead(3 * DAY);
-    await h.startUsage({ default: { body: usageBody({ session: 50, scoped: [{ name: "Opus", percent: 100, resetsAt: weekReset }] }) } });
-    h.scenario({ default: { hooks: [{ event: "StopFailure", payload: { error: "rate_limit", agent_id: "agent-7", last_assistant_message: "You've hit your Opus limit · resets 3:45pm" } }] } });
+    await h.startUsage({
+      default: { body: usageBody({ session: 50, scoped: [{ name: "Opus", percent: 100, resetsAt: weekReset }] }) },
+    });
+    h.scenario({
+      default: {
+        hooks: [
+          {
+            event: "StopFailure",
+            payload: {
+              error: "rate_limit",
+              agent_id: "agent-7",
+              last_assistant_message: "You've hit your Opus limit · resets 3:45pm",
+            },
+          },
+        ],
+      },
+    });
     await h.run(["-p", "hi"]);
     const record = h.readRecord(a);
     expect(record.lastLimit).not.toBeNull();
@@ -243,7 +270,9 @@ describe("a rate_limit Signal records the Limit", () => {
   test("a StopFailure with another error is not", async () => {
     const a = h.plantAccount({ alias: "a", active: true, usage: reading({ session: 50 }) });
     const usage = await h.startUsage({ default: { body: usageBody({ session: 100 }) } });
-    h.scenario({ default: { hooks: [{ event: "StopFailure", payload: { error: "other", last_assistant_message: WALL } }] } });
+    h.scenario({
+      default: { hooks: [{ event: "StopFailure", payload: { error: "other", last_assistant_message: WALL } }] },
+    });
     await h.run(["-p", "hi"]);
     expect(h.readRecord(a).lastLimit).toBeNull();
     expect(usage.requests).toHaveLength(0);
@@ -256,7 +285,11 @@ describe("a rate_limit Signal records the Limit", () => {
       default: {
         hooks: [
           { event: "SessionStart", payload: { source: "clear", session_id: "after-clear" } },
-          { event: "StopFailure", afterMs: 50, payload: { error: "rate_limit", session_id: "after-clear", last_assistant_message: WALL } },
+          {
+            event: "StopFailure",
+            afterMs: 50,
+            payload: { error: "rate_limit", session_id: "after-clear", last_assistant_message: WALL },
+          },
         ],
       },
     });
@@ -269,7 +302,16 @@ describe("a rate_limit Signal records the Limit", () => {
   test("an unnamed Limit whose poll fails stays on the Record with no Window", async () => {
     const a = h.plantAccount({ alias: "a", active: true, usage: reading({ session: 50 }) });
     const usage = await h.startUsage({ default: { status: 500, body: {} } });
-    h.scenario({ default: { hooks: [{ event: "StopFailure", payload: { error: "rate_limit", last_assistant_message: "You've hit your usage limit" } }] } });
+    h.scenario({
+      default: {
+        hooks: [
+          {
+            event: "StopFailure",
+            payload: { error: "rate_limit", last_assistant_message: "You've hit your usage limit" },
+          },
+        ],
+      },
+    });
     await h.run(["-p", "hi"]);
     expect(usage.requests).toHaveLength(1);
     const record = h.readRecord(a);
@@ -331,10 +373,27 @@ describe("list shows a live Limit", () => {
   }
 
   test("limit <window>, or limit while unnamed, between disabled and unknown", async () => {
-    h.plantAccount({ alias: "named", active: true, usage: reading({ session: 100 }), lastLimit: { reportedAt: ago(MIN), sessionId: "s", window: "five_hour", resetsAt: ahead(H) } });
-    h.plantAccount({ alias: "unnamed", usage: reading({ session: 100 }), lastLimit: { reportedAt: ago(MIN), sessionId: "s", window: null, resetsAt: null } });
-    h.plantAccount({ alias: "off", disabled: true, usage: reading({ session: 100 }), lastLimit: { reportedAt: ago(MIN), sessionId: "s", window: "five_hour", resetsAt: ahead(H) } });
-    h.plantAccount({ alias: "expired", lastLimit: { reportedAt: ago(6 * H), sessionId: "s", window: null, resetsAt: null } });
+    h.plantAccount({
+      alias: "named",
+      active: true,
+      usage: reading({ session: 100 }),
+      lastLimit: { reportedAt: ago(MIN), sessionId: "s", window: "five_hour", resetsAt: ahead(H) },
+    });
+    h.plantAccount({
+      alias: "unnamed",
+      usage: reading({ session: 100 }),
+      lastLimit: { reportedAt: ago(MIN), sessionId: "s", window: null, resetsAt: null },
+    });
+    h.plantAccount({
+      alias: "off",
+      disabled: true,
+      usage: reading({ session: 100 }),
+      lastLimit: { reportedAt: ago(MIN), sessionId: "s", window: "five_hour", resetsAt: ahead(H) },
+    });
+    h.plantAccount({
+      alias: "expired",
+      lastLimit: { reportedAt: ago(6 * H), sessionId: "s", window: null, resetsAt: null },
+    });
     const r = await h.run(["account", "list"]);
     expect(r.exitCode).toBe(0);
     expect(stateOf(r.stdout, "named")).toBe("limit five_hour");
@@ -346,9 +405,23 @@ describe("list shows a live Limit", () => {
   });
 
   test("a later Reading still at 100 keeps the Limit; one under 100 with a Reset clears it", async () => {
-    const still = h.plantAccount({ alias: "still", active: true, usage: reading({ session: 100, age: 5 * MIN }), lastLimit: { reportedAt: ago(MIN), sessionId: "s", window: "five_hour", resetsAt: ahead(H) } });
-    const open = h.plantAccount({ alias: "open", usage: reading({ session: 100, age: 5 * MIN }), lastLimit: { reportedAt: ago(MIN), sessionId: "s", window: "five_hour", resetsAt: ahead(H) } });
-    await h.startUsage({ byToken: { [token(still)]: { body: usageBody({ session: 100 }) }, [token(open)]: { body: usageBody({ session: 40 }) } } });
+    const still = h.plantAccount({
+      alias: "still",
+      active: true,
+      usage: reading({ session: 100, age: 5 * MIN }),
+      lastLimit: { reportedAt: ago(MIN), sessionId: "s", window: "five_hour", resetsAt: ahead(H) },
+    });
+    const open = h.plantAccount({
+      alias: "open",
+      usage: reading({ session: 100, age: 5 * MIN }),
+      lastLimit: { reportedAt: ago(MIN), sessionId: "s", window: "five_hour", resetsAt: ahead(H) },
+    });
+    await h.startUsage({
+      byToken: {
+        [token(still)]: { body: usageBody({ session: 100 }) },
+        [token(open)]: { body: usageBody({ session: 40 }) },
+      },
+    });
     const r = await h.run(["account", "list", "--refresh"]);
     expect(r.exitCode).toBe(0);
     expect(stateOf(r.stdout, "still")).toBe("limit five_hour");

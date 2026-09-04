@@ -41,7 +41,10 @@ describe("preferences sync", () => {
     });
     writeFileSync(
       sharedJson(h),
-      JSON.stringify({ theme: "dark", projects: { "/work": { hasTrustDialogAccepted: false, enabledMcpjsonServers: ["shared"] } } }),
+      JSON.stringify({
+        theme: "dark",
+        projects: { "/work": { hasTrustDialogAccepted: false, enabledMcpjsonServers: ["shared"] } },
+      }),
     );
     await h.run(["doctor"]);
     const p = accountJson(h, id).projects["/work"];

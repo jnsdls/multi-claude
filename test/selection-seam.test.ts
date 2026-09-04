@@ -51,7 +51,11 @@ describe("the polling schedule at a Session start", () => {
   });
 
   test("a stale Reading with a passed Reset gets one request", async () => {
-    const a = h.plantAccount({ alias: "a", active: true, usage: reading({ session: 50, age: 5 * MIN, sessionResetsAt: ago(MIN) }) });
+    const a = h.plantAccount({
+      alias: "a",
+      active: true,
+      usage: reading({ session: 50, age: 5 * MIN, sessionResetsAt: ago(MIN) }),
+    });
     const usage = await h.startUsage({ default: { body: usageBody({ session: 3 }) } });
     await h.run(["-p", "hi"]);
     expect(usage.requests.map((q) => q.token)).toEqual([token(a)]);
@@ -97,7 +101,11 @@ describe("the polling schedule at a Session start", () => {
   });
 
   test("an Account in backoff is not asked, and its Reading stands", async () => {
-    const a = h.plantAccount({ alias: "a", active: true, usage: { ...reading({ session: 50, age: 11 * MIN }), backoffUntil: ahead(MIN) } });
+    const a = h.plantAccount({
+      alias: "a",
+      active: true,
+      usage: { ...reading({ session: 50, age: 11 * MIN }), backoffUntil: ahead(MIN) },
+    });
     const usage = await h.startUsage({ default: { body: usageBody() } });
     await h.run(["-p", "hi"]);
     expect(usage.requests).toHaveLength(0);
@@ -134,7 +142,10 @@ describe("leaving the Active account", () => {
     const candidates: string[] = [];
     for (let i = 0; i < 9; i++) candidates.push(h.plantAccount({ alias: `c${i}` }));
     const off = h.plantAccount({ alias: "off", disabled: true });
-    const held = h.plantAccount({ alias: "held", usage: { ...reading({ session: 97, age: 5 * MIN }), backoffUntil: ahead(MIN) } });
+    const held = h.plantAccount({
+      alias: "held",
+      usage: { ...reading({ session: 97, age: 5 * MIN }), backoffUntil: ahead(MIN) },
+    });
     const usage = await h.startUsage({
       byToken: { [token(a)]: { body: usageBody({ session: 96 }) } },
       default: { body: usageBody({ session: 10 }), delayMs: 300 },
@@ -164,7 +175,9 @@ describe("leaving the Active account", () => {
       lastLimit: { reportedAt: ago(10_000), sessionId: "s1", window: "Opus", resetsAt: ahead(H) },
     });
     const b = h.plantAccount({ alias: "b", usage: reading({ session: 40 }) });
-    const usage = await h.startUsage({ default: { body: usageBody({ session: 10, scoped: [{ name: "Opus", percent: 100 }] }) } });
+    const usage = await h.startUsage({
+      default: { body: usageBody({ session: 10, scoped: [{ name: "Opus", percent: 100 }] }) },
+    });
     await h.run(["-p", "hi", "--model", "claude-opus-4-1"]);
     expect(launchedIn()).toBe(h.accountDir(b));
     expect(usage.requests.map((q) => q.token)).toEqual([token(a)]);
@@ -244,7 +257,17 @@ describe("the Requested model steers the applicable Windows", () => {
   let a: string;
   let b: string;
   beforeEach(async () => {
-    a = h.plantAccount({ alias: "a", active: true, usage: reading({ session: 10, scoped: [{ name: "Opus", percent: 99 }, { name: "Sonnet", percent: 10 }] }) });
+    a = h.plantAccount({
+      alias: "a",
+      active: true,
+      usage: reading({
+        session: 10,
+        scoped: [
+          { name: "Opus", percent: 99 },
+          { name: "Sonnet", percent: 10 },
+        ],
+      }),
+    });
     b = h.plantAccount({ alias: "b", usage: reading({ session: 5 }) });
     await h.startUsage({ default: { body: usageBody() } });
   });
@@ -299,7 +322,11 @@ describe("Exhausted (ADR 0003)", () => {
   const line = /^mclaude: every account is at its limit\. Launching on (\S+); (.+)\n$/;
 
   test("launches on the Account whose wall lifts soonest, active untouched, one stderr line", async () => {
-    const a = h.plantAccount({ alias: "a", active: true, usage: reading({ session: 100, sessionResetsAt: ahead(3 * H) }) });
+    const a = h.plantAccount({
+      alias: "a",
+      active: true,
+      usage: reading({ session: 100, sessionResetsAt: ahead(3 * H) }),
+    });
     const b = h.plantAccount({ alias: "b", usage: reading({ session: 100, sessionResetsAt: ahead(H) }) });
     await h.startUsage({ default: { body: usageBody({ session: 100 }) } });
     const r = await h.run(["-p", "hi"]);
@@ -315,7 +342,11 @@ describe("Exhausted (ADR 0003)", () => {
   });
 
   test("Credits come before waiting on a Reset; a reached spend limit does not count", async () => {
-    const a = h.plantAccount({ alias: "a", active: true, usage: reading({ session: 100, sessionResetsAt: ahead(MIN) }) });
+    const a = h.plantAccount({
+      alias: "a",
+      active: true,
+      usage: reading({ session: 100, sessionResetsAt: ahead(MIN) }),
+    });
     const c = h.plantAccount({ alias: "c", usage: reading({ session: 100, credits: true }) });
     h.plantAccount({ alias: "spent", usage: reading({ session: 100, credits: true, spendLimitReached: true }) });
     await h.startUsage({ default: { body: usageBody({ session: 100 }) } });
@@ -366,7 +397,9 @@ describe("Exhausted (ADR 0003)", () => {
       expect(r.exitCode).toBe(75);
       expect(r.stdout).toBe("");
       expect(r.stderr.trim().split("\n")).toHaveLength(1);
-      expect(r.stderr).toMatch(/^mclaude: every account is at its limit; earliest reset is b five_hour at .+\. See `mclaude account list`\n$/);
+      expect(r.stderr).toMatch(
+        /^mclaude: every account is at its limit; earliest reset is b five_hour at .+\. See `mclaude account list`\n$/,
+      );
       expect(h.launches()).toHaveLength(launchesBefore);
     }
 

@@ -6,7 +6,16 @@ import { needsLogin, readCredential } from "../../credential.ts";
 import { EXIT, ExitError } from "../../exit.ts";
 import { warn } from "../../log.ts";
 import { accountDir } from "../../paths.ts";
-import { clearPinned, listOrphans, listRecords, readPinnedId, readRecord, updateRecord, writePinnedId, type AccountRecord } from "../../record.ts";
+import {
+  clearPinned,
+  listOrphans,
+  listRecords,
+  readPinnedId,
+  readRecord,
+  updateRecord,
+  writePinnedId,
+  type AccountRecord,
+} from "../../record.ts";
 import { requireAccount } from "./common.ts";
 
 function label(record: AccountRecord): string {
@@ -62,4 +71,3 @@ export async function runEnable(args: string[]): Promise<number> {
   process.stdout.write(`enabled ${label(record)}\n`);
   return EXIT.OK;
 }
-

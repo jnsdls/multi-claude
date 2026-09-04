@@ -5,11 +5,28 @@ import { EXIT, ExitError } from "../../exit.ts";
 import { warn } from "../../log.ts";
 import { accountDir, sharedClaudeJson } from "../../paths.ts";
 import { readClaudeJson, seedClaudeJson, accountClaudeJson } from "../../prefs.ts";
-import { EMPTY_USAGE, listRecords, mintId, nowIso, writeActiveId, writeFileAtomic, writeRecord, type AccountRecord } from "../../record.ts";
+import {
+  EMPTY_USAGE,
+  listRecords,
+  mintId,
+  nowIso,
+  writeActiveId,
+  writeFileAtomic,
+  writeRecord,
+  type AccountRecord,
+} from "../../record.ts";
 import { runSymlinkFarm } from "../../symlink-farm.ts";
 import { describeOutcome, pollAccount } from "../../usage.ts";
 import { LIST_TIMEOUT_MS } from "../../windows.ts";
-import { assertAliasFree, claudeForLogin, identityLine, loginInDir, logoutInDir, parseLoginFlags, sameIdentity } from "./common.ts";
+import {
+  assertAliasFree,
+  claudeForLogin,
+  identityLine,
+  loginInDir,
+  logoutInDir,
+  parseLoginFlags,
+  sameIdentity,
+} from "./common.ts";
 
 export async function runAdd(args: string[]): Promise<number> {
   const { positionals, flags } = parseLoginFlags(args);
@@ -69,6 +86,8 @@ function chooseAlias(requested: string | undefined, email: string, id: string, r
   if (requested !== undefined) return requested;
   const taken = records.some((r) => r.alias === email || r.id === email);
   if (email && !taken) return email;
-  warn(`Alias "${email || "(no email)"}" is taken, using the id ${id}; run \`mclaude account rename ${id} <alias>\` to change it`);
+  warn(
+    `Alias "${email || "(no email)"}" is taken, using the id ${id}; run \`mclaude account rename ${id} <alias>\` to change it`,
+  );
   return id;
 }

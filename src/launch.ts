@@ -16,11 +16,28 @@ import { accountDir } from "./paths.ts";
 import { syncPreferences } from "./prefs.ts";
 import { limitTrustedUntil, liveLimit, recordLimit } from "./limit.ts";
 import { resolveRequestedModel } from "./model.ts";
-import { listOrphans, listRecords, readActiveId, readPinnedId, readRecord, resolveAccount, writeActiveId, type AccountRecord } from "./record.ts";
+import {
+  listOrphans,
+  listRecords,
+  readActiveId,
+  readPinnedId,
+  readRecord,
+  resolveAccount,
+  writeActiveId,
+  type AccountRecord,
+} from "./record.ts";
 import { writeRunMarker } from "./runmarker.ts";
 import { exitLike, forwardSignals, runCaptured, spawnClaude } from "./spawn.ts";
 import { earliestWall, fallback, refreshOrder, select, type Selection } from "./selection.ts";
-import { cleanupSignalDir, injectSessionArgv, prepareSession, sessionIdFor, sweepSignalDirs, watchSignals, type SessionPlan } from "./signal.ts";
+import {
+  cleanupSignalDir,
+  injectSessionArgv,
+  prepareSession,
+  sessionIdFor,
+  sweepSignalDirs,
+  watchSignals,
+  type SessionPlan,
+} from "./signal.ts";
 import { startStdinPump, type StdinPump } from "./stdin-pump.ts";
 import { runSymlinkFarm } from "./symlink-farm.ts";
 import { pollAccount, pollMany } from "./usage.ts";
@@ -184,19 +201,26 @@ async function checkNamed(
 ): Promise<Chosen> {
   const by = source === "override" ? "--account" : "the pin";
   if (!record) {
-    throw new ExitError(EXIT.REFUSED, `${orphanId} is an Orphan with no Record; ${by} cannot launch it. Run \`mclaude account remove ${orphanId}\``);
+    throw new ExitError(
+      EXIT.REFUSED,
+      `${orphanId} is an Orphan with no Record; ${by} cannot launch it. Run \`mclaude account remove ${orphanId}\``,
+    );
   }
   const who = `${record.alias} (${record.id})`;
   const dir = accountDir(record.id);
   if (needsLogin(await readCredential(dir))) {
-    throw new ExitError(EXIT.REFUSED, `${who} needs login; ${by} cannot launch it. Run \`mclaude account login ${record.alias}\``);
+    throw new ExitError(
+      EXIT.REFUSED,
+      `${who} needs login; ${by} cannot launch it. Run \`mclaude account login ${record.alias}\``,
+    );
   }
   if (record.disabled) warn(`${who} is Disabled; launching on it anyway under ${by}`);
   const now = Date.now();
   const limit = session ? liveLimit(record, session.model, now) : null;
   if (limit) {
     const resetsAt = limit.resetsAt ?? new Date(limitTrustedUntil(record, limit)).toISOString();
-    if (ctx.settings.onExhausted === "fail") throw new ExitError(EXIT.EXHAUSTED, exhaustedFailLine(record.alias, limit.window, resetsAt));
+    if (ctx.settings.onExhausted === "fail")
+      throw new ExitError(EXIT.EXHAUSTED, exhaustedFailLine(record.alias, limit.window, resetsAt));
     warn(`${who} is at its limit; launching on it anyway under ${by}. ${resetsTail(limit.window, resetsAt)}`);
   }
   return { record, dir, makeActive: source === "pin", source };
@@ -218,7 +242,13 @@ async function runSessionStart(ctx: LaunchContext): Promise<never> {
     warn(`${ctx.scan.bare ? "--bare" : "--safe-mode"} skips hooks, so Handoff is off for this launch`);
   }
   const plan = prepareSession(ctx.scan, sessionIdFor(ctx.scan));
-  const injected = injectSessionArgv(ctx.forwarded, ctx.scan, plan.sessionId, plan.settingsPath, plan.userSettingsUnparseable);
+  const injected = injectSessionArgv(
+    ctx.forwarded,
+    ctx.scan,
+    plan.sessionId,
+    plan.settingsPath,
+    plan.userSettingsUnparseable,
+  );
   if (injected.warning) warn(injected.warning);
 
   const live: LiveSession = {
@@ -249,10 +279,17 @@ async function runSessionStart(ctx: LaunchContext): Promise<never> {
       live.handingOff = true;
       live.pump?.detach();
       try {
-        const record = await recordLimit(live.chosen.record.id, signal, { claudePath: ctx.claudePath, fallbackSessionId: live.sessionId, model: live.model });
+        const record = await recordLimit(live.chosen.record.id, signal, {
+          claudePath: ctx.claudePath,
+          fallbackSessionId: live.sessionId,
+          model: live.model,
+        });
         if (record && live.handoffAllowed) await runHandoff(signal, live);
         else {
-          if (record) warn(`usage limit on ${record.alias}; ${live.chosen.source === "pin" ? "pinned" : "--account"} holds, staying`);
+          if (record)
+            warn(
+              `usage limit on ${record.alias}; ${live.chosen.source === "pin" ? "pinned" : "--account"} holds, staying`,
+            );
           if (live.child) live.pump?.attach(live.child);
         }
       } catch (e) {
@@ -380,7 +417,13 @@ async function chooseBySelection(ctx: LaunchContext, model: string | null): Prom
   return actOnSelection(ctx, chosen, records, model, now);
 }
 
-function actOnSelection(ctx: LaunchContext, chosen: Selection, records: AccountRecord[], model: string | null, now: number): Chosen {
+function actOnSelection(
+  ctx: LaunchContext,
+  chosen: Selection,
+  records: AccountRecord[],
+  model: string | null,
+  now: number,
+): Chosen {
   switch (chosen.kind) {
     case "stay":
     case "move":
@@ -396,18 +439,30 @@ function actOnSelection(ctx: LaunchContext, chosen: Selection, records: AccountR
 function chooseFallback(ctx: LaunchContext, records: AccountRecord[], model: string | null, now: number): Chosen {
   if (ctx.settings.onExhausted === "fail") {
     const wall = earliestWall(records, model, now);
-    throw new ExitError(EXIT.EXHAUSTED, wall ? exhaustedFailLine(wall.record.alias, wall.window, wall.resetsAt) : exhaustedFailLine(null, null, null));
+    throw new ExitError(
+      EXIT.EXHAUSTED,
+      wall ? exhaustedFailLine(wall.record.alias, wall.window, wall.resetsAt) : exhaustedFailLine(null, null, null),
+    );
   }
   const fb = fallback(records, model, now);
-  if (!fb) throw new ExitError(EXIT.REFUSED, "every Account is Disabled. Run `mclaude account enable <account>` or pin one");
-  const tail = fb.tier === "unknown" ? "its usage is unknown." : fb.tier === "credits" ? "using extra usage credits." : resetsTail(fb.window, fb.resetsAt);
+  if (!fb)
+    throw new ExitError(EXIT.REFUSED, "every Account is Disabled. Run `mclaude account enable <account>` or pin one");
+  const tail =
+    fb.tier === "unknown"
+      ? "its usage is unknown."
+      : fb.tier === "credits"
+        ? "using extra usage credits."
+        : resetsTail(fb.window, fb.resetsAt);
   warn(`every account is at its limit. Launching on ${fb.record.alias}; ${tail}`);
   return { record: fb.record, dir: accountDir(fb.record.id), makeActive: false, source: "fallback" };
 }
 
 /** The exit-75 line: the Account whose wall lifts first, its Window and the local Reset time. */
 function exhaustedFailLine(alias: string | null, window: string | null, resetsAt: string | null): string {
-  const when = alias && resetsAt ? `earliest reset is ${alias} ${window ?? "usage"} at ${localTime(resetsAt)}` : "no reset time is known";
+  const when =
+    alias && resetsAt
+      ? `earliest reset is ${alias} ${window ?? "usage"} at ${localTime(resetsAt)}`
+      : "no reset time is known";
   return `every account is at its limit; ${when}. See \`mclaude account list\``;
 }
 
@@ -448,7 +503,12 @@ export async function spawnOn(
   ctx: LaunchContext,
   chosen: Chosen,
   argv: string[],
-  opts: { limitDir: string | undefined; cwd?: string; stdin?: "inherit" | "pipe"; onSpawn?: (child: Subprocess) => void },
+  opts: {
+    limitDir: string | undefined;
+    cwd?: string;
+    stdin?: "inherit" | "pipe";
+    onSpawn?: (child: Subprocess) => void;
+  },
 ): Promise<Subprocess> {
   if (!existsSync(chosen.dir)) {
     throw new ExitError(EXIT.REFUSED, `Account dir for ${chosen.record.alias} (${chosen.record.id}) is missing`);

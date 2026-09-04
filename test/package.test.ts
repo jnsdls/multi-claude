@@ -14,9 +14,7 @@ describe("the npm packages", () => {
     const m = mainManifest(pkg);
     expect(m.name).toBe(MAIN_PACKAGE);
     expect(m.bin).toEqual({ mclaude: "bin/mclaude" });
-    expect(m.optionalDependencies).toEqual(
-      Object.fromEntries(TARGETS.map((t) => [platformPackage(t), pkg.version])),
-    );
+    expect(m.optionalDependencies).toEqual(Object.fromEntries(TARGETS.map((t) => [platformPackage(t), pkg.version])));
   });
   test("a platform manifest is restricted to its os and cpu", () => {
     const m = platformManifest(pkg, "linux-arm64");

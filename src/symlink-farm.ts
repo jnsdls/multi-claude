@@ -40,7 +40,9 @@ export function runSymlinkFarm(accountDirPath: string, shared: string = sharedHo
         // Claude Code made the dir before the Shared home had the entry; nothing is lost by linking.
         rmSync(link, { recursive: true, force: true });
       } else {
-        warn(`${link} is a real ${st.isDirectory() ? "directory" : "file"} where a link to ${target} belongs; merge it by hand`);
+        warn(
+          `${link} is a real ${st.isDirectory() ? "directory" : "file"} where a link to ${target} belongs; merge it by hand`,
+        );
         continue;
       }
     }

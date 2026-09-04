@@ -157,10 +157,7 @@ export function writeFileAtomic(path: string, data: string, mode = 0o600): void 
  * change on top of it, merges under the write rule, and writes atomically.
  * The callback sees the freshest Record and returns the whole next Record.
  */
-export function updateRecord(
-  id: string,
-  change: (current: AccountRecord | null) => AccountRecord,
-): AccountRecord {
+export function updateRecord(id: string, change: (current: AccountRecord | null) => AccountRecord): AccountRecord {
   const current = readRecord(id);
   const next = mergeRecord(current, change(current));
   writeFileAtomic(recordPath(id), `${JSON.stringify(next, null, 2)}\n`);

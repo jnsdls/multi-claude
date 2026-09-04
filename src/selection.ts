@@ -5,7 +5,14 @@
 import { accountIsUnknownForSelection, limitTrustedUntil, liveLimit } from "./limit.ts";
 import type { AccountRecord, LastLimit } from "./record.ts";
 import { inBackoff } from "./usage.ts";
-import { applicableWindows, CANDIDATE_CAP, isFresh, maxUtilization, tightestWindow, type NamedWindow } from "./windows.ts";
+import {
+  applicableWindows,
+  CANDIDATE_CAP,
+  isFresh,
+  maxUtilization,
+  tightestWindow,
+  type NamedWindow,
+} from "./windows.ts";
 
 export interface SelectionInput {
   records: AccountRecord[];
@@ -74,7 +81,10 @@ function byHeadroom(a: Assessment, b: Assessment): number {
  */
 export function select(input: SelectionInput): Selection {
   const { activeId, model, threshold, now } = input;
-  const eligible = input.records.filter((r) => !r.disabled).sort(byAddedAt).map((r) => assess(r, model, now));
+  const eligible = input.records
+    .filter((r) => !r.disabled)
+    .sort(byAddedAt)
+    .map((r) => assess(r, model, now));
   if (eligible.length === 0) return { kind: "none" };
 
   const active = eligible.find((a) => a.record.id === activeId) ?? null;
@@ -141,7 +151,10 @@ function byWallReset(a: Assessment, b: Assessment): number {
  * Null when every Account is Disabled.
  */
 export function fallback(records: AccountRecord[], model: string | null, now: number): Fallback | null {
-  const eligible = records.filter((r) => !r.disabled).sort(byAddedAt).map((r) => assess(r, model, now));
+  const eligible = records
+    .filter((r) => !r.disabled)
+    .sort(byAddedAt)
+    .map((r) => assess(r, model, now));
   if (eligible.length === 0) return null;
   const unknown = eligible.find((a) => a.unknown);
   if (unknown) return { record: unknown.record, tier: "unknown", window: null, resetsAt: null };
@@ -152,7 +165,11 @@ export function fallback(records: AccountRecord[], model: string | null, now: nu
 }
 
 /** The earliest wall among eligible Accounts, for the `onExhausted=fail` line. Null when no Reset is known. */
-export function earliestWall(records: AccountRecord[], model: string | null, now: number): { record: AccountRecord; window: string | null; resetsAt: string } | null {
+export function earliestWall(
+  records: AccountRecord[],
+  model: string | null,
+  now: number,
+): { record: AccountRecord; window: string | null; resetsAt: string } | null {
   const walls = records
     .filter((r) => !r.disabled)
     .map((r) => ({ record: r, ...wall(assess(r, model, now)) }))
@@ -169,11 +186,20 @@ export function earliestWall(records: AccountRecord[], model: string | null, now
  * are never probed, and a fresh Reading is not asked for again. A Needs login
  * Account may be among them; the poll skips it.
  */
-export function refreshOrder(records: AccountRecord[], activeId: string | null, model: string | null, now: number): AccountRecord[] {
+export function refreshOrder(
+  records: AccountRecord[],
+  activeId: string | null,
+  model: string | null,
+  now: number,
+): AccountRecord[] {
   const pool = records
     .filter((r) => r.id !== activeId && !r.disabled && !inBackoff(r, now) && !isFresh(r.usage, now))
     .sort(byAddedAt);
-  const withReading = pool.filter((r) => r.usage.lastGood !== null).map((r) => assess(r, model, now)).sort(byHeadroom).map((a) => a.record);
+  const withReading = pool
+    .filter((r) => r.usage.lastGood !== null)
+    .map((r) => assess(r, model, now))
+    .sort(byHeadroom)
+    .map((a) => a.record);
   const neverPolled = pool.filter((r) => r.usage.lastGood === null && !r.usage.lastAttemptAt);
   const errored = pool.filter((r) => r.usage.lastGood === null && !!r.usage.lastAttemptAt);
   return [...withReading, ...neverPolled, ...errored].slice(0, CANDIDATE_CAP);

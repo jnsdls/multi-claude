@@ -37,12 +37,18 @@ export function assertAliasFree(alias: string, records: AccountRecord[], exceptI
   for (const r of records) {
     if (r.id === exceptId) continue;
     if (r.id === alias || r.alias === alias) {
-      throw new ExitError(EXIT.USAGE, `"${alias}" is already the ${r.id === alias ? "id" : "Alias"} of ${r.alias} (${r.id})`);
+      throw new ExitError(
+        EXIT.USAGE,
+        `"${alias}" is already the ${r.id === alias ? "id" : "Alias"} of ${r.alias} (${r.id})`,
+      );
     }
   }
 }
 
-export function sameIdentity(a: Pick<Identity, "accountUuid" | "organizationUuid">, b: Pick<Identity, "accountUuid" | "organizationUuid">): boolean {
+export function sameIdentity(
+  a: Pick<Identity, "accountUuid" | "organizationUuid">,
+  b: Pick<Identity, "accountUuid" | "organizationUuid">,
+): boolean {
   return a.accountUuid === b.accountUuid && a.organizationUuid === b.organizationUuid;
 }
 
@@ -70,7 +76,10 @@ export function parseLoginFlags(args: string[]): { positionals: string[]; flags:
     } else if (a === "--sso") {
       flags.sso = true;
     } else if (a.startsWith("-")) {
-      throw new ExitError(EXIT.USAGE, `flag "${a}" is not accepted here; only --email <e> and --sso reach claude auth login`);
+      throw new ExitError(
+        EXIT.USAGE,
+        `flag "${a}" is not accepted here; only --email <e> and --sso reach claude auth login`,
+      );
     } else {
       positionals.push(a);
     }
