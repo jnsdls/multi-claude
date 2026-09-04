@@ -8,11 +8,11 @@ mclaude needs Claude Code installed. It finds `claude` through `MCLAUDE_CLAUDE_P
 
 ### npm
 
-The npm package is `multi-claude` and installs the `mclaude` command. (The npm name `mclaude` belongs to an unrelated package.) It pulls in one platform package, `multi-claude-<os>-<cpu>`, that carries the compiled binary, so nothing beyond Node is needed to run it. An install with `--no-optional` skips that package and `mclaude` exits 69 saying so.
+The npm package is `@jnsdls/multi-claude` and installs the `mclaude` command. (npm's `mclaude` is an unrelated package, and `multi-claude` is refused as too close to another one.) It pulls in one platform package, `multi-claude-<os>-<cpu>`, that carries the compiled binary, so nothing beyond Node is needed to run it. An install with `--no-optional` skips that package and `mclaude` exits 69 saying so.
 
 ```sh
-npm install -g multi-claude
-npx multi-claude --version
+npm install -g @jnsdls/multi-claude
+npx @jnsdls/multi-claude --version
 ```
 
 ### Release tarball

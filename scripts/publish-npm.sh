@@ -1,5 +1,5 @@
 #!/bin/sh
-# Publishes the four platform packages, then multi-claude itself, so the
+# Publishes the four platform packages, then @jnsdls/multi-claude itself, so the
 # optionalDependencies resolve the moment the main package lands. Run after
 # `bun run build:binaries`. Same script for the release workflow and the
 # one-off first publish by hand.

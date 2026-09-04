@@ -60,7 +60,7 @@ function stagePlatformPackage(t: Target, binary: string) {
       {
         name,
         version,
-        description: `The mclaude binary for ${t}. Installed by the multi-claude package; not for direct use.`,
+        description: `The mclaude binary for ${t}. Installed by the @jnsdls/multi-claude package; not for direct use.`,
         license: pkg.license,
         repository: pkg.repository,
         homepage: pkg.homepage,
@@ -76,7 +76,7 @@ function stagePlatformPackage(t: Target, binary: string) {
   );
   writeFileSync(
     join(dir, "README.md"),
-    `# ${name}\n\nThe compiled \`mclaude\` binary for ${t}. The [multi-claude](https://www.npmjs.com/package/multi-claude) package depends on it and picks the one for your platform; install that instead.\n`,
+    `# ${name}\n\nThe compiled \`mclaude\` binary for ${t}. The [@jnsdls/multi-claude](https://www.npmjs.com/package/@jnsdls/multi-claude) package depends on it and picks the one for your platform; install that instead.\n`,
   );
   console.log(`staged npm/${name}`);
 }

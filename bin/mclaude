@@ -15,7 +15,7 @@ try {
 } catch {
   process.stderr.write(
     `mclaude: the ${pkg} package is not installed. It ships the binary for ${target}; ` +
-      `reinstall multi-claude without --no-optional, or use a release tarball from ` +
+      `reinstall @jnsdls/multi-claude without --no-optional, or use a release tarball from ` +
       `https://github.com/jnsdls/multi-claude/releases\n`,
   );
   process.exit(69);
