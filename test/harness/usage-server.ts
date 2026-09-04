@@ -41,7 +41,9 @@ export async function startUsageServer(scenario: UsageScenario = {}): Promise<Us
       const auth = req.headers.get("authorization");
       const token = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
       const headers: Record<string, string> = {};
-      req.headers.forEach((v, k) => (headers[k] = v));
+      req.headers.forEach((v, k) => {
+        headers[k] = v;
+      });
       requests.push({ token, headers, path: url.pathname, at: Date.now() });
       const s = holder.scenario;
       let resp: UsageResponse | undefined;

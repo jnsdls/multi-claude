@@ -55,7 +55,7 @@ export function parseHelpNames(help: string): { flags: string[]; commands: strin
       const arity = arityOf(spec);
       for (const part of spec.split(",")) {
         const name = part.trim().split(/\s+/)[0];
-        if (name && name.startsWith("-")) {
+        if (name?.startsWith("-")) {
           flags.add(name);
           flagArity[name] = arity;
         }

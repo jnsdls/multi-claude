@@ -8,7 +8,8 @@ The launcher lives in `src/`, one TypeScript program on Bun. `scripts/build.ts` 
 bun install
 bun run build          # dist/main.js; the tests spawn it under bun
 bun test               # after a build; `bun run test` builds first
-bunx tsc --noEmit      # typecheck
+bun run typecheck      # tsc --noEmit
+bun run lint           # biome lint; `bun run check` runs all three
 ```
 
 ## Module map

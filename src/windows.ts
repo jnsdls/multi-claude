@@ -29,7 +29,7 @@ function namedWindows(body: UsageBody | null): NamedWindow[] {
   const out: NamedWindow[] = [];
   for (const name of ["five_hour", "seven_day"] as const) {
     const w = body[name];
-    if (w && w.resets_at && w.utilization !== null && w.utilization !== undefined) {
+    if (w?.resets_at && w.utilization !== null && w.utilization !== undefined) {
       out.push({ name, utilization: w.utilization, resetsAt: w.resets_at, scoped: false });
     }
   }
