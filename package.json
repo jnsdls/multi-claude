@@ -1,6 +1,6 @@
 {
   "name": "@jnsdls/multi-claude",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Run Claude Code under the subscription account with headroom",
   "private": true,
   "type": "module",
