@@ -68,4 +68,4 @@ gh release download v<version> --pattern SHASUMS256.txt -O /tmp/SHASUMS256.txt
 HOMEBREW_TAP_TOKEN="$(gh auth token)" bun run publish:brew v<version> /tmp/SHASUMS256.txt
 ```
 
-To check a formula change before it ships: `bun run scripts/homebrew.ts <version> SHASUMS256.txt > /opt/homebrew/Library/Taps/jnsdls/homebrew-tap/Formula/mclaude.rb`, then `brew audit --strict --online jnsdls/tap/mclaude`, `brew style jnsdls/tap/mclaude`, `brew reinstall jnsdls/tap/mclaude` and `brew test jnsdls/tap/mclaude`.
+To check a formula change before it ships: `bun run scripts/homebrew.ts <version> SHASUMS256.txt > "$(brew --repository jnsdls/tap)/Formula/mclaude.rb"`, then `brew audit --strict --online jnsdls/tap/mclaude`, `brew style jnsdls/tap/mclaude`, `brew reinstall jnsdls/tap/mclaude` and `brew test jnsdls/tap/mclaude`.
