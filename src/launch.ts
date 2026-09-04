@@ -11,11 +11,24 @@ import { EXIT, ExitError } from "./exit.ts";
 import { warn } from "./log.ts";
 import { accountDir } from "./paths.ts";
 import { syncPreferences } from "./prefs.ts";
-import { readActiveId, readRecord, writeActiveId, type AccountRecord } from "./record.ts";
+import { liveLimit } from "./limit.ts";
+import { resolveRequestedModel } from "./model.ts";
+import { listRecords, readActiveId, readRecord, writeActiveId, type AccountRecord } from "./record.ts";
 import { writeRunMarker } from "./runmarker.ts";
 import { exitLike, forwardSignals, runCaptured, spawnClaude } from "./spawn.ts";
+import { earliestWall, fallback, refreshOrder, select, type Selection } from "./selection.ts";
 import { runSymlinkFarm } from "./symlink-farm.ts";
+import { pollAccount, pollMany } from "./usage.ts";
 import { compareVersions, parseVersion, VERSION, VERSION_FLOOR } from "./version.ts";
+import {
+  ACTIVE_STALE_MS,
+  applicableWindows,
+  CANDIDATE_CONCURRENCY,
+  isFresh,
+  LAUNCH_TIMEOUT_MS,
+  maxUtilization,
+  readingStands,
+} from "./windows.ts";
 
 export const HELP_FOOTER = [
   "mclaude: runs Claude Code under the Account with headroom. Reserved words: account, version, hook.",
@@ -109,7 +122,7 @@ function chooseForPlainPassthrough(_ctx: LaunchContext): Chosen {
 
 async function runSessionStart(ctx: LaunchContext): Promise<number> {
   await checkVersionFloor(ctx);
-  const chosen = chooseForSessionStart(ctx);
+  const chosen = await chooseForSessionStart(ctx);
   if (ctx.scan.bare || ctx.scan.safeMode) {
     warn(`${ctx.scan.bare ? "--bare" : "--safe-mode"} skips hooks, so Handoff is off for this launch`);
   }
@@ -117,8 +130,97 @@ async function runSessionStart(ctx: LaunchContext): Promise<number> {
 }
 
 /** Override, then Pin, then Selection. */
-function chooseForSessionStart(_ctx: LaunchContext): Chosen {
-  return requireActiveAccount();
+async function chooseForSessionStart(ctx: LaunchContext): Promise<Chosen> {
+  return chooseBySelection(ctx);
+}
+
+/**
+ * Whether the Active account gets its one request before Selection reads it.
+ * Older than ten minutes: always. Fresh: never. Stale, under the threshold,
+ * with every Reset ahead: never. A live Limit that no Reading has looked at
+ * since: once, so the Limit can clear early (ADR 0007). Otherwise: once.
+ */
+export function activeNeedsPoll(record: AccountRecord, model: string | null, threshold: number, now: number): boolean {
+  const usage = record.usage;
+  const fetched = usage.fetchedAt ? Date.parse(usage.fetchedAt) : Number.NaN;
+  if (Number.isNaN(fetched) || now - fetched >= ACTIVE_STALE_MS) return true;
+  const limit = liveLimit(record, model, now);
+  if (limit && !(fetched > Date.parse(limit.reportedAt))) return true;
+  if (isFresh(usage, now)) return false;
+  const utilization = maxUtilization(applicableWindows(usage.lastGood, model));
+  if (utilization !== null && utilization < threshold && readingStands(usage, now)) return false;
+  return true;
+}
+
+/**
+ * Selection over every Record. The Active account gets at most one request;
+ * when Selection says leave, the candidates get theirs, then Selection runs
+ * again over what came back. Nothing is polled once claude is running.
+ */
+async function chooseBySelection(ctx: LaunchContext): Promise<Chosen> {
+  let records = listRecords();
+  if (records.length === 0) {
+    throw new ExitError(EXIT.REFUSED, "no Active account. Run `mclaude account add` to log in to one");
+  }
+  const model = resolveRequestedModel(ctx.scan, process.env, process.cwd());
+  const threshold = ctx.settings.switchThreshold;
+  const activeId = readActiveId();
+  const now = Date.now();
+  const poll = { timeoutMs: LAUNCH_TIMEOUT_MS, claudePath: ctx.claudePath, now };
+
+  const active = records.find((r) => r.id === activeId);
+  if (active && !active.disabled && activeNeedsPoll(active, model, threshold, now)) {
+    await pollAccount(active, poll);
+    records = listRecords();
+  }
+
+  let chosen = select({ records, activeId, model, threshold, now });
+  if (chosen.kind !== "stay") {
+    const candidates = refreshOrder(records, activeId, model, now);
+    if (candidates.length > 0) {
+      await pollMany(candidates, { ...poll, concurrency: CANDIDATE_CONCURRENCY });
+      records = listRecords();
+      chosen = select({ records, activeId, model, threshold, now });
+    }
+  }
+  return actOnSelection(ctx, chosen, records, model, now);
+}
+
+function actOnSelection(ctx: LaunchContext, chosen: Selection, records: AccountRecord[], model: string | null, now: number): Chosen {
+  switch (chosen.kind) {
+    case "stay":
+    case "move":
+      return { record: chosen.record, dir: accountDir(chosen.id), makeActive: true };
+    case "none":
+      throw new ExitError(EXIT.REFUSED, "every Account is Disabled. Run `mclaude account enable <account>` or pin one");
+    case "exhausted":
+      return chooseFallback(ctx, records, model, now);
+  }
+}
+
+/** Exhausted (ADR 0003): launch on the Fallback Account with one stderr line, or exit 75 when told to fail. */
+function chooseFallback(ctx: LaunchContext, records: AccountRecord[], model: string | null, now: number): Chosen {
+  if (ctx.settings.onExhausted === "fail") {
+    const wall = earliestWall(records, model, now);
+    const when = wall
+      ? `earliest reset is ${wall.record.alias} ${wall.window ?? "usage"} at ${localTime(wall.resetsAt)}`
+      : "no reset time is known";
+    throw new ExitError(EXIT.EXHAUSTED, `every account is at its limit; ${when}. See \`mclaude account list\``);
+  }
+  const fb = fallback(records, model, now);
+  if (!fb) throw new ExitError(EXIT.REFUSED, "every Account is Disabled. Run `mclaude account enable <account>` or pin one");
+  const tail =
+    fb.tier === "unknown"
+      ? "its usage is unknown."
+      : fb.tier === "credits"
+        ? "using extra usage credits."
+        : `${fb.window ?? "usage"} resets ${fb.resetsAt ? localTime(fb.resetsAt) : "at an unknown time"}.`;
+  warn(`every account is at its limit. Launching on ${fb.record.alias}; ${tail}`);
+  return { record: fb.record, dir: accountDir(fb.record.id), makeActive: false };
+}
+
+function localTime(iso: string): string {
+  return new Date(iso).toLocaleString();
 }
 
 /** A Session start on a claude below the Version floor is refused with exit 69. Unparseable output proceeds. */
