@@ -58,8 +58,9 @@ export interface Identity {
 export interface LastLimit {
   reportedAt: string;
   sessionId: string;
-  /** The Window the Limit named: `five_hour`, `seven_day`, or a scoped display name. Null until known. */
+  /** The Window the Limit is in: `five_hour`, `seven_day`, or a scoped display name. Null until known. */
   window: string | null;
+  /** The Window's Reset as the post-Limit Reading gave it. Null when that Reading never came; the name is then off the wall text. */
   resetsAt: string | null;
 }
 

@@ -94,7 +94,7 @@ A bare `--` forces Passthrough of whatever follows, so a prompt that begins with
 mclaude -- account "what does this word mean"
 ```
 
-The `--` reaches `claude` unchanged. The compiled binaries and the npm shim both keep it.
+mclaude drops the `--` itself and forwards everything after it. The compiled binaries and the npm shim both keep it on the way in.
 
 `mclaude --version` prints Claude Code's version on stdout and `mclaude <version>` on stderr. `mclaude --help` prints Claude Code's help and a three-line footer on stderr.
 

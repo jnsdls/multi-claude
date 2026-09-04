@@ -70,7 +70,7 @@ describe("list --refresh", () => {
     const r = await h.run(["account", "list", "--refresh"]);
     expect(r.exitCode).toBe(0);
     const row = cells(r.stdout);
-    expect(row).toEqual(["a", id, "max", "42% ↻ in 2h", "7% ↻ in 2d", "Opus 12% Sonnet 3%", "0s", "ok"]);
+    expect(row).toEqual(["a", id, "max", "42% ↻ in 2h", "7% ↻ in 2d", "Opus 12% ↻ in 2d Sonnet 3% ↻ in 2d", "0s", "ok"]);
     const rec = h.readRecord(id);
     expect(rec.usage.lastGood.five_hour.utilization).toBe(42);
     expect(rec.usage.lastGood.limits.map((l: any) => l.kind)).toEqual(["session", "weekly_all", "weekly_scoped", "weekly_scoped"]);
@@ -96,7 +96,7 @@ describe("list --refresh", () => {
     const r = await h.run(["account", "list", "--refresh"]);
     expect(r.exitCode).toBe(0);
     const row = cells(r.stdout);
-    expect(row.slice(3)).toEqual(["42% ↻ in 1h", "7% ↻ in 2d", "Opus 12%", "5m", "ok"]);
+    expect(row.slice(3)).toEqual(["42% ↻ in 1h", "7% ↻ in 2d", "Opus 12% ↻ in 2d", "5m", "ok"]);
     const after = h.readRecord(id).usage;
     expect(after.lastGood).toEqual(before.lastGood);
     expect(after.fetchedAt).toBe(before.fetchedAt);
@@ -152,7 +152,7 @@ describe("list --refresh", () => {
     expect(after.lastGood).toEqual(before.lastGood);
     expect(after.fetchedAt).toBe(before.fetchedAt);
     expect(after.backoffUntil).toBeNull();
-    expect(cells(r.stdout).slice(3)).toEqual(["42% ↻ in 1h", "7% ↻ in 2d", "Opus 12%", "5m", "ok"]);
+    expect(cells(r.stdout).slice(3)).toEqual(["42% ↻ in 1h", "7% ↻ in 2d", "Opus 12% ↻ in 2d", "5m", "ok"]);
     expect(r.stderr).toContain("timeout");
   }, 30_000);
 

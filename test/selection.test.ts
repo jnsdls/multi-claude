@@ -171,6 +171,12 @@ describe("select: Exhausted", () => {
     const rs = [record({ id: "a", body: body({ session: 100 }) }), record({ id: "u", body: null })];
     expect(run(rs, "a")).toMatchObject({ kind: "move", id: "u" });
   });
+  test("a Window at 100 whose Reset passed is no evidence: the Account is Unknown, never Exhausted, backoff or not", () => {
+    const passed = { ...body({ session: 100, sessionReset: iso(-H) }), seven_day: null };
+    const rs = [record({ id: "a", body: body({ session: 100 }) }), record({ id: "u", body: passed, fetchedAt: -2 * H, backoffUntil: 10 * MIN })];
+    expect(run(rs, "a")).toMatchObject({ kind: "move", id: "u" });
+    expect(fallback(rs, null, NOW)).toMatchObject({ record: { id: "u" }, tier: "unknown" });
+  });
   test("a Disabled Account with room does not save an Exhausted pool", () => {
     const rs = [record({ id: "a", body: body({ session: 100 }) }), record({ id: "d", disabled: true, body: body({ session: 1 }) })];
     expect(run(rs, "a")).toEqual({ kind: "exhausted" });

@@ -23,12 +23,8 @@ export interface NamedWindow {
   scoped: boolean;
 }
 
-/**
- * Every Window in the body that carries evidence, whether or not it applies to
- * a model. A Window with no `resets_at` has not started (or the endpoint sent a
- * hollow placeholder) and counts for nothing.
- */
-export function evidentWindows(body: UsageBody | null): NamedWindow[] {
+/** Every Window in the body that has a Reset, whether or not that Reset has passed. */
+function namedWindows(body: UsageBody | null): NamedWindow[] {
   if (!body) return [];
   const out: NamedWindow[] = [];
   for (const name of ["five_hour", "seven_day"] as const) {
@@ -45,14 +41,29 @@ export function evidentWindows(body: UsageBody | null): NamedWindow[] {
   return out;
 }
 
+function resetAhead(w: NamedWindow, now: number): boolean {
+  const t = Date.parse(w.resetsAt);
+  return !Number.isNaN(t) && t > now;
+}
+
 /**
- * The Windows that count toward Headroom for `model`. Unscoped Windows always
- * apply; a scoped one applies when its lower-cased display name is a substring
- * of the lower-cased model string. A null model means every scoped Window applies.
+ * Every Window in the body that carries evidence at `now`, whether or not it
+ * applies to a model. A Window with no `resets_at` has not started (or the
+ * endpoint sent a hollow placeholder), and one whose Reset has passed reads a
+ * Utilization that is no longer true; neither counts for anything.
  */
-export function applicableWindows(body: UsageBody | null, model: string | null): NamedWindow[] {
-  const lower = model?.toLowerCase() ?? null;
-  return evidentWindows(body).filter((w) => !w.scoped || lower === null || lower.includes(w.name.toLowerCase()));
+export function evidentWindows(body: UsageBody | null, now: number): NamedWindow[] {
+  return namedWindows(body).filter((w) => resetAhead(w, now));
+}
+
+/** Unscoped Windows always apply; a scoped one when its display name is inside the model string; a null model takes every scoped one. */
+function appliesTo(w: NamedWindow, model: string | null): boolean {
+  return !w.scoped || model === null || model.toLowerCase().includes(w.name.toLowerCase());
+}
+
+/** The evident Windows that count toward Headroom for `model`. */
+export function applicableWindows(body: UsageBody | null, model: string | null, now: number): NamedWindow[] {
+  return evidentWindows(body, now).filter((w) => appliesTo(w, model));
 }
 
 /** Highest Utilization among the Windows, or null when there are none. */
@@ -80,44 +91,23 @@ export function earliestReset(windows: NamedWindow[]): string | null {
   return best;
 }
 
-/** Every Reset the Reading carries, evident or not. */
-function resetsIn(body: UsageBody | null): number[] {
-  if (!body) return [];
-  const out: number[] = [];
-  for (const w of [body.five_hour, body.seven_day, ...(body.limits ?? [])]) {
-    if (!w?.resets_at) continue;
-    const t = Date.parse(w.resets_at);
-    if (!Number.isNaN(t)) out.push(t);
-  }
-  return out;
-}
-
 export function isFresh(usage: Usage, now: number): boolean {
   if (!usage.fetchedAt) return false;
   const t = Date.parse(usage.fetchedAt);
   return !Number.isNaN(t) && now - t < FRESH_MS;
 }
 
-/** A Reading stands while every Reset it carries is in the future. */
-export function readingStands(usage: Usage, now: number): boolean {
-  if (!usage.lastGood) return false;
-  return resetsIn(usage.lastGood).every((t) => t > now);
+/** A Reading stands for `model` while it has an applicable Window and every applicable Reset is in the future. */
+export function readingStands(usage: Usage, model: string | null, now: number): boolean {
+  const windows = namedWindows(usage.lastGood).filter((w) => appliesTo(w, model));
+  return windows.length > 0 && windows.every((w) => resetAhead(w, now));
 }
 
 /**
- * Unknown: no Reading at all, or a Reset in the last one has passed and the
- * attempt made since then brought nothing back (`lastAttemptAt` is after that
- * Reset and `fetchedAt` is not). A passed Reset with no attempt since is stale,
- * not Unknown.
+ * Unknown: nothing to decide on. No Reading was ever taken, or every Window in
+ * the last one has passed its Reset. Whether a fetch was tried since makes no
+ * difference; the Reading is trusted until a Reset in it passes and not after.
  */
 export function isUnknown(record: Pick<AccountRecord, "usage">, now: number): boolean {
-  const usage = record.usage;
-  if (!usage.lastGood) return true;
-  const attempt = usage.lastAttemptAt ? Date.parse(usage.lastAttemptAt) : Number.NaN;
-  const fetched = usage.fetchedAt ? Date.parse(usage.fetchedAt) : Number.NaN;
-  for (const reset of resetsIn(usage.lastGood)) {
-    if (reset > now) continue;
-    if (attempt > reset && !(fetched > reset)) return true;
-  }
-  return false;
+  return evidentWindows(record.usage.lastGood, now).length === 0;
 }

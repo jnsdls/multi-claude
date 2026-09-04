@@ -7,6 +7,7 @@ import { relativeAge, relativeUntil } from "../../format.ts";
 import { warn } from "../../log.ts";
 import { accountDir } from "../../paths.ts";
 import { listOrphans, listRecords, readActiveId, readPinnedId, type AccountRecord, type Window } from "../../record.ts";
+import { refreshDue } from "../../refresh.ts";
 import { describeOutcome, pollMany } from "../../usage.ts";
 import { liveLimit } from "../../limit.ts";
 import { isFresh, isUnknown, LIST_CONCURRENCY, LIST_TIMEOUT_MS } from "../../windows.ts";
@@ -34,11 +35,11 @@ function windowCell(w: Window | null | undefined, now: number): string {
   return `${Math.round(w.utilization)}% ↻ ${relativeUntil(w.resets_at, now)}`;
 }
 
-/** Per-model weekly Windows: `Opus 12% Sonnet 4%`, or `-` when none. */
-function modelWindowsCell(record: AccountRecord): string {
+/** Per-model weekly Windows: `Opus 12% ↻ in 2d Sonnet 4% ↻ in 2d`, or `-` when none. */
+function modelWindowsCell(record: AccountRecord, now: number): string {
   const scoped = (record.usage.lastGood?.limits ?? []).filter((l) => l.kind === "weekly_scoped" && l.scope?.model?.display_name);
   if (scoped.length === 0) return "-";
-  return scoped.map((l) => `${l.scope!.model!.display_name} ${Math.round(l.percent)}%`).join(" ");
+  return scoped.map((l) => `${l.scope!.model!.display_name} ${windowCell({ utilization: l.percent, resets_at: l.resets_at }, now)}`).join(" ");
 }
 
 /** One table row's cells, in COLUMNS order. Pure. */
@@ -52,7 +53,7 @@ export function buildRow(input: RowInput, now: number = Date.now()): string[] {
     record.identity.subscriptionType ?? "-",
     windowCell(usage.lastGood?.five_hour, now),
     windowCell(usage.lastGood?.seven_day, now),
-    modelWindowsCell(record),
+    modelWindowsCell(record, now),
     relativeAge(usage.fetchedAt, now),
     input.state,
   ];
@@ -93,17 +94,26 @@ export function renderTable(rows: string[][]): string {
  * `--refresh`: every Account whose Reading is older than 180 s gets the Refresh
  * trigger when due and one usage request, Disabled included. A Needs login
  * Account is never asked; backoff is honoured inside the poll. claude comes
- * from the environment or PATH, never config.json.
+ * from the environment or PATH, never config.json; when it is not there and a
+ * trigger is due, one line says the trigger was skipped and the poll goes on
+ * with the token as it is.
  */
 async function refreshRecords(records: AccountRecord[]): Promise<AccountRecord[]> {
   const now = Date.now();
+  const claudePath = claudeWithoutConfig();
   const due: AccountRecord[] = [];
+  const triggerSkipped: string[] = [];
   for (const r of records) {
     if (isFresh(r.usage, now)) continue;
-    if (needsLogin(await readCredential(accountDir(r.id)))) continue;
+    const credential = await readCredential(accountDir(r.id));
+    if (needsLogin(credential)) continue;
+    if (!claudePath && refreshDue(credential, now)) triggerSkipped.push(r.alias);
     due.push(r);
   }
-  const results = await pollMany(due, { concurrency: LIST_CONCURRENCY, timeoutMs: LIST_TIMEOUT_MS, claudePath: claudeWithoutConfig(), now });
+  if (triggerSkipped.length > 0) {
+    warn(`claude is not on PATH and MCLAUDE_CLAUDE_PATH is unset, so the Refresh trigger was skipped for ${triggerSkipped.join(", ")}; the token is used as it is`);
+  }
+  const results = await pollMany(due, { concurrency: LIST_CONCURRENCY, timeoutMs: LIST_TIMEOUT_MS, claudePath, now });
   const updated = new Map(results.map((p) => [p.record.id, p.record]));
   for (const p of results) {
     const line = describeOutcome(p.record.alias, p);

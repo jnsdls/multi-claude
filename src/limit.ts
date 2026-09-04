@@ -5,7 +5,7 @@
 import type { Signal } from "./hook.ts";
 import { readRecord, updateRecord, type AccountRecord, type LastLimit } from "./record.ts";
 import { pollAccount } from "./usage.ts";
-import { evidentWindows, isUnknown, LAUNCH_TIMEOUT_MS, tightestWindow, type NamedWindow } from "./windows.ts";
+import { applicableWindows, evidentWindows, isUnknown, LAUNCH_TIMEOUT_MS, tightestWindow, type NamedWindow } from "./windows.ts";
 
 /** With no Reset to go by, a Limit is believed this long after it was reported. */
 export const LIMIT_DEFAULT_TRUST_MS = 5 * 3600_000;
@@ -37,34 +37,31 @@ export function limitTrustedUntil(record: Pick<AccountRecord, "usage">, limit: L
   const own = parse(limit.resetsAt);
   if (!Number.isNaN(own)) return own;
   let earliest = Number.NaN;
-  for (const w of evidentWindows(record.usage.lastGood)) {
+  for (const w of evidentWindows(record.usage.lastGood, reported)) {
     const t = parse(w.resetsAt);
-    if (Number.isNaN(t) || !(t > reported)) continue;
     if (Number.isNaN(earliest) || t < earliest) earliest = t;
   }
   return Number.isNaN(earliest) ? reported + LIMIT_DEFAULT_TRUST_MS : earliest;
 }
 
-function sameName(a: string, b: string): boolean {
-  return a === b || a.toLowerCase() === b.toLowerCase();
-}
-
 function sameWindow(w: NamedWindow, name: string): boolean {
-  return sameName(w.name, name);
+  return w.name.toLowerCase() === name.toLowerCase();
 }
 
 /**
  * Early clear (ADR 0007): only a Reading fetched after the report, carrying a
  * Window with a Reset, that shows the named Window under 100. A hollow
- * response never clears. An unnamed Limit clears only when every evident
- * Window in such a Reading reads under 100.
+ * response never clears. A Limit the poll did not name (no Reset: unnamed, or
+ * named off the wall text alone) clears only when every evident Window in
+ * such a Reading reads under 100.
  */
 export function limitClearedByReading(record: Pick<AccountRecord, "usage">, limit: LastLimit): boolean {
+  const reported = parse(limit.reportedAt);
   const fetched = parse(record.usage.fetchedAt);
-  if (Number.isNaN(fetched) || !(fetched > parse(limit.reportedAt))) return false;
-  const windows = evidentWindows(record.usage.lastGood);
+  if (Number.isNaN(fetched) || !(fetched > reported)) return false;
+  const windows = evidentWindows(record.usage.lastGood, reported);
   if (windows.length === 0) return false;
-  if (limit.window === null) return windows.every((w) => w.utilization < 100);
+  if (limit.window === null || limit.resetsAt === null) return windows.every((w) => w.utilization < 100);
   const named = windows.filter((w) => sameWindow(w, limit.window!));
   return named.length > 0 && named.every((w) => w.utilization < 100);
 }
@@ -106,8 +103,8 @@ export function accountIsUnknownForSelection(record: Pick<AccountRecord, "usage"
  * The Window a wall text names, as a best effort: `session limit` is
  * `five_hour`, `weekly limit` is `seven_day`, and `<Name> limit` with a
  * capitalised name (Opus, Sonnet, Fable) is that scoped display name. Anything
- * else (`usage limit`, `monthly spend limit`, no text) is null and the poll
- * names the Window instead.
+ * else (`usage limit`, `monthly spend limit`, no text) is null. A label for
+ * when the poll brings nothing, never evidence.
  */
 export function windowFromWallText(text: string | undefined): string | null {
   if (!text) return null;
@@ -120,28 +117,26 @@ export function windowFromWallText(text: string | undefined): string | null {
 
 /**
  * The Limit a `StopFailure` Signal reports. Pure. `reportedAt` is when the hook
- * received it, the session id comes from the payload (or the tracked one when
- * the payload lacks it), and the Window is read off the wall text when it can
- * be. The Reset is never in the payload.
+ * received it and the session id comes from the payload (or the tracked one
+ * when the payload lacks it). Neither the Window nor the Reset is in the
+ * payload; the post-Limit usage request names them.
  */
 export function limitFromSignal(payload: Record<string, unknown>, receivedAt: string, fallbackSessionId = ""): LastLimit {
   const sessionId = typeof payload.session_id === "string" ? payload.session_id : fallbackSessionId;
-  const text = typeof payload.last_assistant_message === "string" ? payload.last_assistant_message : undefined;
-  return { reportedAt: receivedAt, sessionId, window: windowFromWallText(text), resetsAt: null };
+  return { reportedAt: receivedAt, sessionId, window: null, resetsAt: null };
+}
+
+function wallText(payload: Record<string, unknown>): string | undefined {
+  return typeof payload.last_assistant_message === "string" ? payload.last_assistant_message : undefined;
 }
 
 /**
- * The Window a Reading blames for a Limit: the one the wall text named when the
- * Reading carries it, else the Window reading 100, else the highest. Null with
- * no evident Window.
+ * The Window a Reading blames for a Limit hit under `model`: the applicable
+ * Window reading 100, else the highest evident one. Null with no evident Window.
  */
-export function windowBlamed(record: Pick<AccountRecord, "usage">, named: string | null): NamedWindow | null {
-  const windows = evidentWindows(record.usage.lastGood);
-  if (named !== null) {
-    const match = windows.find((w) => sameWindow(w, named));
-    if (match) return match;
-  }
-  return windows.find((w) => w.utilization >= 100) ?? tightestWindow(windows);
+export function windowBlamed(record: Pick<AccountRecord, "usage">, model: string | null, now: number): NamedWindow | null {
+  const full = applicableWindows(record.usage.lastGood, model, now).find((w) => w.utilization >= 100);
+  return full ?? tightestWindow(evidentWindows(record.usage.lastGood, now));
 }
 
 function fetchedAfter(record: Pick<AccountRecord, "usage">, iso: string): boolean {
@@ -149,41 +144,45 @@ function fetchedAfter(record: Pick<AccountRecord, "usage">, iso: string): boolea
   return !Number.isNaN(fetched) && fetched > parse(iso);
 }
 
+function nameLimit(accountId: string, fallback: AccountRecord, window: string | null, resetsAt: string | null): AccountRecord {
+  return updateRecord(accountId, (latest) => {
+    const rec = latest ?? fallback;
+    return rec.lastLimit ? { ...rec, lastLimit: { ...rec.lastLimit, window, resetsAt } } : rec;
+  });
+}
+
 /**
  * Writes the Limit a Signal reports to the Account's Record, then makes one
  * usage request to name the Window and its Reset. The request is skipped when a
- * Reading fetched after the report already exists, or when the Record holds a
- * live Limit in the same Window that a later Reading already confirmed; its
- * Window and Reset then carry over. Several sessions on one Account hit the
- * wall within seconds, and the first one's request serves them all (ADR 0007).
- * Null when the Record is gone.
+ * Reading fetched after the report already exists (it names the Window), or
+ * when the Record holds a live Limit that a later Reading already confirmed;
+ * its Window and Reset then carry over. Several sessions on one Account hit
+ * the wall within seconds, and the first one's request serves them all (ADR
+ * 0007). When the request brings nothing, the wall text supplies a name and no
+ * Reset. Null when the Record is gone.
  */
 export async function recordLimit(
   accountId: string,
   signal: Signal,
-  opts: { now?: number; claudePath?: string | null; fallbackSessionId?: string } = {},
+  opts: { now?: number; claudePath?: string | null; fallbackSessionId?: string; model?: string | null } = {},
 ): Promise<AccountRecord | null> {
   const now = opts.now ?? Date.now();
+  const model = opts.model ?? null;
   const current = readRecord(accountId);
   if (!current) return null;
   const reported = limitFromSignal(signal.payload, signal.receivedAt, opts.fallbackSessionId);
   const prior = liveLimit(current, null, now);
   const confirmed = prior && fetchedAfter(current, prior.reportedAt) ? prior : null;
-  const carried: LastLimit =
-    confirmed && (reported.window === null || (confirmed.window !== null && sameName(confirmed.window, reported.window)))
-      ? { ...reported, window: confirmed.window, resetsAt: confirmed.resetsAt }
-      : reported;
+  const carried: LastLimit = confirmed ? { ...reported, window: confirmed.window, resetsAt: confirmed.resetsAt } : reported;
   let record = updateRecord(accountId, (latest) => ({ ...(latest ?? current), lastLimit: carried }));
-  if (carried !== reported || fetchedAfter(record, reported.reportedAt)) return record;
+  if (confirmed) return record;
 
-  const result = await pollAccount(record, { timeoutMs: LAUNCH_TIMEOUT_MS, claudePath: opts.claudePath, now });
-  if (result.outcome?.kind !== "ok") return result.record;
-  const blamed = windowBlamed(result.record, carried.window);
-  if (!blamed) return result.record;
-  record = updateRecord(accountId, (latest) => {
-    const rec = latest ?? result.record;
-    const limit = rec.lastLimit ?? carried;
-    return { ...rec, lastLimit: { ...limit, window: blamed.name, resetsAt: blamed.resetsAt } };
-  });
-  return record;
+  if (!fetchedAfter(record, reported.reportedAt)) {
+    const result = await pollAccount(record, { timeoutMs: LAUNCH_TIMEOUT_MS, claudePath: opts.claudePath, now });
+    record = result.record;
+    if (result.outcome?.kind !== "ok") return nameLimit(accountId, record, windowFromWallText(wallText(signal.payload)), null);
+  }
+  const blamed = windowBlamed(record, model, now);
+  if (!blamed) return nameLimit(accountId, record, windowFromWallText(wallText(signal.payload)), null);
+  return nameLimit(accountId, record, blamed.name, blamed.resetsAt);
 }

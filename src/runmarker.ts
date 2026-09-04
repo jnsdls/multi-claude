@@ -1,8 +1,9 @@
 // The Run marker: <Account dir>/.mclaude/run/<mclaude pid>, written for as long
 // as a launch runs there. Readers treat a pid that fails kill -0 as stale.
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { runMarkerDir } from "./paths.ts";
+import { writeFileAtomic } from "./record.ts";
 
 export function pidAlive(pid: number): boolean {
   try {
@@ -14,10 +15,8 @@ export function pidAlive(pid: number): boolean {
 }
 
 export function writeRunMarker(accountDirPath: string, pid = process.pid): () => void {
-  const dir = runMarkerDir(accountDirPath);
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const file = join(dir, String(pid));
-  writeFileSync(file, `${new Date().toISOString()}\n`, { mode: 0o600 });
+  const file = join(runMarkerDir(accountDirPath), String(pid));
+  writeFileAtomic(file, `${new Date().toISOString()}\n`);
   return () => rmSync(file, { force: true });
 }
 

@@ -3,8 +3,17 @@
 // every launch.
 import { existsSync, lstatSync, mkdirSync, readdirSync, readlinkSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
+import { warn } from "./log.ts";
 import { sharedHome } from "./paths.ts";
 import { PRIVATE_ENTRIES } from "./tables.ts";
+
+function isEmptyDir(path: string): boolean {
+  try {
+    return readdirSync(path).length === 0;
+  } catch {
+    return false;
+  }
+}
 
 export function runSymlinkFarm(accountDirPath: string, shared: string = sharedHome()): void {
   mkdirSync(accountDirPath, { recursive: true, mode: 0o700 });
@@ -27,9 +36,11 @@ export function runSymlinkFarm(accountDirPath: string, shared: string = sharedHo
           // fall through and relink
         }
         rmSync(link, { force: true });
+      } else if (st.isDirectory() && isEmptyDir(link)) {
+        // Claude Code made the dir before the Shared home had the entry; nothing is lost by linking.
+        rmSync(link, { recursive: true, force: true });
       } else {
-        // A real file or dir Claude Code created before the farm ran. Leave it: it
-        // may hold data, and a private entry is always safe.
+        warn(`${link} is a real ${st.isDirectory() ? "directory" : "file"} where a link to ${target} belongs; merge it by hand`);
         continue;
       }
     }

@@ -17,7 +17,7 @@ bunx tsc --noEmit      # typecheck
 | --- | --- |
 | `src/main.ts` | dispatch on argv position zero |
 | `src/argv.ts` | the argv contract: mode, own flags, scan-only flags, Session start classification; pure |
-| `src/tables.ts` | the three drift tables and the private-entry list; Checked version lives in `src/version.ts` |
+| `src/tables.ts` | the four drift tables (scanned flags, claude commands, Preferences keys, flag arity) and the private-entry list; Checked version lives in `src/version.ts` |
 | `src/config.ts` | `config.json` parsing, precedence flag > env > file > default |
 | `src/claude-path.ts` | where claude is |
 | `src/env.ts` | the one child-environment builder (ADR 0013) |

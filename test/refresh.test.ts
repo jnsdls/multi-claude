@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readdirSync, realpathSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Harness, usageBody } from "./harness/harness.ts";
 
 let h: Harness;
@@ -44,6 +44,18 @@ describe("the Refresh trigger on list --refresh", () => {
     expect(usage.requests[0]!.at).toBeGreaterThanOrEqual(trigger.startedAt as number);
     expect(lastCell(r.stdout)).toBe("ok");
     expect(r.stdout).toContain("33% ↻");
+  });
+
+  test("with no claude to run it, a due trigger is skipped with one line and the poll goes on", async () => {
+    h.plantAccount({ alias: "a", expiresAt: SOON() });
+    const usage = await h.startUsage({ default: { body: usageBody({ session: 33 }) } });
+    const r = await h.run(["account", "list", "--refresh"], { env: { MCLAUDE_CLAUDE_PATH: undefined, PATH: `${dirname(process.execPath)}:/usr/bin:/bin` } });
+    expect(r.exitCode).toBe(0);
+    expect(h.calls()).toHaveLength(0);
+    expect(usage.requests).toHaveLength(1);
+    expect(r.stderr.trim().split("\n")).toHaveLength(1);
+    expect(r.stderr).toContain("Refresh trigger was skipped for a");
+    expect(lastCell(r.stdout)).toBe("ok");
   });
 
   test("a zeroed credential shows needs login and no usage request is made", async () => {

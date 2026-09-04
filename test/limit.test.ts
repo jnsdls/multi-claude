@@ -51,7 +51,7 @@ describe("limitClearedByReading: early clear", () => {
   });
   test("a hollow Window carries no evidence (ADR 0007)", () => {
     const r = record({ id: "a", body: body({ session: 0, sessionReset: null }), fetchedAt: -5 * MIN });
-    expect(limitClearedByReading(r, limit({ reportedAt: -10 * MIN }))).toBe(false);
+    expect(limitClearedByReading(r, limit({ reportedAt: -10 * MIN, resetsAt: 2 * H }))).toBe(false);
   });
   test("another Window under 100 says nothing about the named one", () => {
     const r = record({ id: "a", body: body({ session: 100, week: 10 }), fetchedAt: -5 * MIN });
@@ -59,13 +59,18 @@ describe("limitClearedByReading: early clear", () => {
   });
   test("a scoped Limit clears on its own Window", () => {
     const r = record({ id: "a", body: body({ session: 100, scoped: [["Opus", 30]] }), fetchedAt: -5 * MIN });
-    expect(limitClearedByReading(r, limit({ reportedAt: -10 * MIN, window: "Opus" }))).toBe(true);
+    expect(limitClearedByReading(r, limit({ reportedAt: -10 * MIN, window: "Opus", resetsAt: 72 * H }))).toBe(true);
   });
   test("an unnamed Limit clears only when every evident Window is under 100", () => {
     const some = record({ id: "a", body: body({ session: 100, week: 10 }), fetchedAt: -5 * MIN });
     expect(limitClearedByReading(some, limit({ reportedAt: -10 * MIN, window: null }))).toBe(false);
     const all = record({ id: "b", body: body({ session: 60, week: 10 }), fetchedAt: -5 * MIN });
     expect(limitClearedByReading(all, limit({ reportedAt: -10 * MIN, window: null }))).toBe(true);
+  });
+  test("a name off the wall text (no Reset) is a label: the named Window open is not enough", () => {
+    const r = record({ id: "a", body: body({ session: 40, scoped: [["Opus", 100]] }), fetchedAt: -5 * MIN });
+    expect(limitClearedByReading(r, limit({ reportedAt: -10 * MIN, window: "five_hour", resetsAt: null }))).toBe(false);
+    expect(limitClearedByReading(r, limit({ reportedAt: -10 * MIN, window: "five_hour", resetsAt: 2 * H }))).toBe(true);
   });
 });
 

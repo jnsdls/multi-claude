@@ -3,7 +3,7 @@
 ## Before the tag
 
 - Link the open `claude-drift` issue in the release PR, if there is one. A release may ship with it open (ADR 0012).
-- If you are moving the Checked version: re-read the three tables in `src/tables.ts` against the installed `claude --help` and a fresh login's `.claude.json`, then in one PR change `CHECKED_VERSION` in `src/version.ts` and regenerate `fixtures/claude-help.json` with `bun run scripts/extract-claude-help.ts > fixtures/claude-help.json`. `test/version.test.ts` fails when the two disagree. Close the drift issue in that PR.
+- If you are moving the Checked version: re-read the four tables in `src/tables.ts` against the installed `claude --help` and a fresh login's `.claude.json`, then in one PR change `CHECKED_VERSION` in `src/version.ts` and regenerate `fixtures/claude-help.json` with `bun run scripts/extract-claude-help.ts > fixtures/claude-help.json`. `test/version.test.ts` fails when the two disagree, and it also compares the fixture's `flagArity` map with `CLAUDE_FLAG_ARITY`, so copy the regenerated map into the table in the same PR. Close the drift issue in that PR.
 - Verify these four by hand against a real claude. No test covers them.
   1. Keychain read path: `mclaude account add` on macOS, then `mclaude account list` shows the Account without a Needs login mark.
   2. Refresh trigger write-back: plant an Account whose token expires within the hour, run a Session start, confirm `.credentials.json` in the Account dir carries a later `expiresAt`.

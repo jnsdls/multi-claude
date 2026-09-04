@@ -2,6 +2,7 @@
 // outcome written to the Record, the Refresh trigger run first when the token
 // is inside its expiry margin. Nothing here ever marks an Account Exhausted.
 import { needsLogin, readCredential, type OAuthCredential } from "./credential.ts";
+import { isObject } from "./json.ts";
 import { accountDir } from "./paths.ts";
 import { nowIso, readRecord, updateRecord, type AccountRecord, type LimitEntry, type UsageBody, type Window } from "./record.ts";
 import { refreshDue, runRefreshTrigger, type RefreshOutcome } from "./refresh.ts";
@@ -32,10 +33,6 @@ export type UsageOutcome =
 /** The endpoint base: production, or MCLAUDE_USAGE_URL for the test server. */
 export function usageBase(): string {
   return (process.env.MCLAUDE_USAGE_URL || DEFAULT_USAGE_BASE).replace(/\/+$/, "");
-}
-
-function isObject(v: unknown): v is Record<string, unknown> {
-  return !!v && typeof v === "object" && !Array.isArray(v);
 }
 
 function parseWindow(v: unknown): Window | null {

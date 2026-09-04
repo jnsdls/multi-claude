@@ -196,6 +196,29 @@ describe("passthrough", () => {
     expect(lstatSync(join(dir, ".claude.json")).isSymbolicLink()).toBe(false);
   });
 
+  test("symlink farm replaces an empty real dir with the link and leaves a non-empty dir or a file, naming each", async () => {
+    const id = h.plantAccount({ active: true });
+    const dir = h.accountDir(id);
+    mkdirSync(join(h.sharedHome, "skills"), { recursive: true });
+    mkdirSync(join(h.sharedHome, "todos"), { recursive: true });
+    writeFileSync(join(h.sharedHome, "history.jsonl"), "");
+    mkdirSync(join(dir, "skills"));
+    mkdirSync(join(dir, "todos"));
+    writeFileSync(join(dir, "todos", "one.json"), "{}");
+    writeFileSync(join(dir, "history.jsonl"), "mine\n");
+    const r = await h.run(["doctor"]);
+    expect(r.exitCode).toBe(0);
+    expect(lstatSync(join(dir, "skills")).isSymbolicLink()).toBe(true);
+    expect(lstatSync(join(dir, "todos")).isDirectory()).toBe(true);
+    expect(existsSync(join(dir, "todos", "one.json"))).toBe(true);
+    expect(lstatSync(join(dir, "history.jsonl")).isFile()).toBe(true);
+    const lines = r.stderr.trim().split("\n").sort();
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain(join(dir, "history.jsonl"));
+    expect(lines[0]).toContain("merge it by hand");
+    expect(lines[1]).toContain(join(dir, "todos"));
+  });
+
   test("writes a Run marker while the child runs and removes it after", async () => {
     const id = h.plantAccount({ active: true });
     h.scenario({ default: { sleepMs: 5000 } });

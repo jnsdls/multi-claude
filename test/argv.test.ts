@@ -123,13 +123,24 @@ describe("relaunchArgv", () => {
     expect(relaunchArgv(["--model", "opus", "--", "hi", "--not-a-flag"], SID, PATH, "again")).toEqual(["--model", "opus", "--resume", SID, "--settings", PATH, "again"]);
   });
 
-  test("a value after an unknown flag stays", () => {
+  test("values are told from the prompt by arity: variadic keeps every value, boolean none, one exactly one", () => {
+    expect(relaunchArgv(["--add-dir", "/a", "/b", "-p", "hi"], SID, PATH, "again")).toEqual(["--add-dir", "/a", "/b", "-p", "--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["--allowedTools", "Bash", "Read"], SID, PATH, "again")).toEqual(["--allowedTools", "Bash", "Read", "--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["--verbose", "hi"], SID, PATH, "again")).toEqual(["--verbose", "--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["--permission-mode", "plan", "hi"], SID, PATH, "again")).toEqual(["--permission-mode", "plan", "--resume", SID, "--settings", PATH, "again"]);
     expect(relaunchArgv(["--add-dir", "/x", "--verbose"], SID, PATH, "again")).toEqual(["--add-dir", "/x", "--verbose", "--resume", SID, "--settings", PATH, "again"]);
   });
 
-  test("the user's --resume, -r, --continue and -c go, with their values", () => {
+  test("a flag the table does not know is boolean, and an inline value takes nothing more", () => {
+    expect(relaunchArgv(["--brand-new", "hi"], SID, PATH, "again")).toEqual(["--brand-new", "--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["--add-dir=/a", "/b"], SID, PATH, "again")).toEqual(["--add-dir=/a", "--resume", SID, "--settings", PATH, "again"]);
+  });
+
+  test("the user's --resume, -r, --continue and -c go, with their values; a bare --resume (the picker) too", () => {
     expect(relaunchArgv(["--resume", "old", "-p"], SID, PATH, "again")).toEqual(["-p", "--resume", SID, "--settings", PATH, "again"]);
     expect(relaunchArgv(["-r", "--continue", "-c", "--resume=old"], SID, PATH, "again")).toEqual(["--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["--resume"], SID, PATH, "again")).toEqual(["--resume", SID, "--settings", PATH, "again"]);
+    expect(relaunchArgv(["--resume", "--model", "opus"], SID, PATH, "again")).toEqual(["--model", "opus", "--resume", SID, "--settings", PATH, "again"]);
   });
 
   test("no prompt on the stream-json path, and a prompt starting with a dash goes behind --", () => {

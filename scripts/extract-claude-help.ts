@@ -1,29 +1,45 @@
-// Extracts the flag and command names from `claude --help` (ADR 0012). Only
-// names are kept, so wording changes never show up in the drift diff.
+// Extracts the flag and command names from `claude --help` (ADR 0012), plus
+// each flag's arity. Only names and arities are kept, so wording changes never
+// show up in the drift diff.
 //
 //   bun run scripts/extract-claude-help.ts [path-to-claude] > fixtures/claude-help.json
 //
 // The parser is exported so a test can feed it a fixed help text.
 import { parseVersion } from "../src/version.ts";
 
+/** How many values a flag takes: `<x>` one, `<x...>` variadic, `[x]` optional, nothing boolean. */
+export type FlagArity = "none" | "one" | "optional" | "variadic";
+
 export interface HelpNames {
   version: string;
   flags: string[];
   commands: string[];
+  flagArity: Record<string, FlagArity>;
 }
 
 /** Section headings in commander's help output. */
 const SECTION = /^(\S.*):\s*$/;
 
+/** The value placeholder after the names: `<x>`, `<x...>`, `[x]` or `[x...]`. */
+function arityOf(spec: string): FlagArity {
+  const m = /(<[^>]*>|\[[^\]]*\])/.exec(spec);
+  if (!m) return "none";
+  const placeholder = m[1]!;
+  if (placeholder.includes("...")) return "variadic";
+  return placeholder.startsWith("<") ? "one" : "optional";
+}
+
 /**
- * Pulls flag names from the Options section and command names from the Commands
- * section. An entry line is indented by exactly two spaces; deeper indents are
- * description continuations. `--allowedTools, --allowed-tools <tools...>` gives
- * both names; `plugin|plugins` gives both commands.
+ * Pulls flag names and arities from the Options section and command names from
+ * the Commands section. An entry line is indented by exactly two spaces; deeper
+ * indents are description continuations. `--allowedTools, --allowed-tools
+ * <tools...>` gives both names, each variadic; `plugin|plugins` gives both
+ * commands.
  */
-export function parseHelpNames(help: string): { flags: string[]; commands: string[] } {
+export function parseHelpNames(help: string): { flags: string[]; commands: string[]; flagArity: Record<string, FlagArity> } {
   const flags = new Set<string>();
   const commands = new Set<string>();
+  const flagArity: Record<string, FlagArity> = {};
   let section = "";
   for (const line of help.split("\n")) {
     const heading = SECTION.exec(line);
@@ -36,9 +52,13 @@ export function parseHelpNames(help: string): { flags: string[]; commands: strin
     const text = entry[1]!;
     if (section === "options") {
       const spec = text.split(/ {2,}/)[0]!;
+      const arity = arityOf(spec);
       for (const part of spec.split(",")) {
         const name = part.trim().split(/\s+/)[0];
-        if (name && name.startsWith("-")) flags.add(name);
+        if (name && name.startsWith("-")) {
+          flags.add(name);
+          flagArity[name] = arity;
+        }
       }
     } else if (section === "commands") {
       const word = text.split(/\s+/)[0]!;
@@ -47,7 +67,8 @@ export function parseHelpNames(help: string): { flags: string[]; commands: strin
       }
     }
   }
-  return { flags: [...flags].sort(), commands: [...commands].sort() };
+  const sortedFlags = [...flags].sort();
+  return { flags: sortedFlags, commands: [...commands].sort(), flagArity: Object.fromEntries(sortedFlags.map((f) => [f, flagArity[f]!])) };
 }
 
 async function capture(claude: string, argv: string[]): Promise<string> {

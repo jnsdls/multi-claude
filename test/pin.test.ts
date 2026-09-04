@@ -364,16 +364,17 @@ describe("Pin", () => {
     expect(h.launches()).toHaveLength(0);
   });
 
-  test("a dangling pin is ignored with one line and Selection runs", async () => {
-    const a = h.plantAccount({ alias: "a", active: true, usage: reading({ session: 5 }) });
+  test("a dangling pin exits 1 pointing at account unpin; Selection does not run", async () => {
+    h.plantAccount({ alias: "a", active: true, usage: reading({ session: 5 }) });
     h.setPinned("gonegone");
-    await h.startUsage({ default: { body: usageBody() } });
+    const usage = await h.startUsage({ default: { body: usageBody() } });
     const r = await h.run(["-p", "hi"]);
-    expect(r.exitCode).toBe(0);
+    expect(r.exitCode).toBe(1);
     expect(lines(r.stderr)).toHaveLength(1);
     expect(r.stderr).toContain("gonegone");
     expect(r.stderr).toContain("account unpin");
-    expect(launchedIn()).toBe(h.accountDir(a));
+    expect(usage.requests).toHaveLength(0);
+    expect(h.launches()).toHaveLength(0);
   });
 
   test("a Disabled pinned Account launches with one stderr line", async () => {

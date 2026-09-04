@@ -1,4 +1,5 @@
 // Spawning claude: inherited stdio (ADR 0006), forwarded signals, mirrored exit.
+import { constants } from "node:os";
 import type { Subprocess } from "bun";
 
 export interface SpawnOptions {
@@ -25,7 +26,7 @@ export const FORWARDED_SIGNALS: ForwardedSignal[] = ["SIGTERM", "SIGHUP"];
 
 /**
  * Forwards SIGTERM and SIGHUP to whichever child `current()` returns, so a
- * Handoff can swap the child without re-registering. Returns a disposer.
+ * Handoff can replace the child without re-registering. Returns a disposer.
  */
 export function forwardSignals(current: () => Subprocess | undefined): () => void {
   const handlers = FORWARDED_SIGNALS.map((sig) => {
@@ -58,15 +59,7 @@ export function exitLike(child: Subprocess): never {
 }
 
 function signalNumber(sig: string): number {
-  const table: Record<string, number> = {
-    SIGHUP: 1,
-    SIGINT: 2,
-    SIGQUIT: 3,
-    SIGABRT: 6,
-    SIGKILL: 9,
-    SIGTERM: 15,
-  };
-  return table[sig] ?? 15;
+  return (constants.signals as Record<string, number>)[sig] ?? constants.signals.SIGTERM;
 }
 
 /** Runs a claude command to completion with captured output. */

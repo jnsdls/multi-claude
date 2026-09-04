@@ -60,7 +60,7 @@ export function report(d: Drift): string {
   if (hasDrift(d)) {
     lines.push(
       "",
-      "Re-read the three tables in `src/tables.ts`, regenerate `fixtures/claude-help.json` with",
+      "Re-read the four tables in `src/tables.ts`, regenerate `fixtures/claude-help.json` with",
       "`bun run scripts/extract-claude-help.ts > fixtures/claude-help.json`, and move `CHECKED_VERSION`",
       "in `src/version.ts` in the same PR. See `docs/release-checklist.md`.",
     );

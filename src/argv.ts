@@ -3,9 +3,11 @@
 // without consuming them; a Session start is classified from the scan.
 import {
   CLAUDE_COMMANDS,
+  CLAUDE_FLAG_ARITY,
   SCAN_BOOL_FLAGS,
   SCAN_OPTIONAL_VALUE_FLAGS,
   SCAN_VALUE_FLAGS,
+  type FlagArity,
 } from "./tables.ts";
 
 export type Mode =
@@ -234,7 +236,7 @@ export type Classification =
 /**
  * Session starts are the TUI default, a positional prompt, `-p`, `--resume`,
  * `--continue` and `--bg`. A first positional that is one of claude's own
- * subcommands is a plain Passthrough.
+ * commands is a plain Passthrough.
  */
 export function classify(scan: Scan): Classification {
   if (scan.help) return "help";
@@ -281,59 +283,44 @@ export function removeValueFlag(argv: readonly string[], flag: string): string[]
   return out;
 }
 
-/** The flags a Handoff relaunch replaces: the session is named by `--resume` and the settings file by the plan. */
-const RELAUNCH_DROPPED_VALUE_FLAGS = ["--session-id", "--settings"];
-const RELAUNCH_DROPPED_BOOL_FLAGS = new Set(["-c", "--continue"]);
+/** What a Handoff relaunch replaces: the session is named by `--resume` and the settings file by the plan. */
+const RELAUNCH_DROPPED_FLAGS = new Set(["--session-id", "--settings", "--resume", "-r", "--continue", "-c"]);
 
 /**
- * The argv a Handoff relaunch hands claude: the user's tokens minus anything
- * that names a session or the settings file, minus the prompt already in the
- * transcript, then `--resume <id> --settings <path>` and the resend as the
- * positional prompt (none on the stream-json path, where stdin carries it).
+ * The argv a Handoff relaunch hands claude: the user's flags with their values,
+ * minus anything that names a session or the settings file, minus every
+ * positional (the prompt is already in the transcript), then `--resume <id>
+ * --settings <path>` and the resend as the positional prompt (none on the
+ * stream-json path, where stdin carries it).
  *
- * A positional is dropped only when the token before it is not an unknown
- * flag, because `--add-dir /x` is a flag with a value mclaude does not know
- * and `/x` must stay. Everything after a bare `--` is prompt text and goes.
+ * Values are told from positionals by the arity table: a `one` flag takes the
+ * next token, a `variadic` flag every token up to the next one starting with
+ * `-`, an `optional` flag the next token when it does not start with `-`. A
+ * flag the table does not know is boolean. Everything after a bare `--` is
+ * prompt text and goes.
  */
 export function relaunchArgv(forwarded: readonly string[], sessionId: string, settingsPath: string, prompt: string | null): string[] {
-  let argv: string[] = [...forwarded];
-  for (const flag of RELAUNCH_DROPPED_VALUE_FLAGS) argv = removeValueFlag(argv, flag);
   const out: string[] = [];
-  let prevUnknownFlag = false;
   let i = 0;
-  while (i < argv.length) {
-    const tok = argv[i]!;
+  while (i < forwarded.length) {
+    const tok = forwarded[i]!;
     if (tok === "--") break;
     const isFlag = tok.startsWith("-") && tok !== "-";
-    const name = tok.startsWith("--") && tok.includes("=") ? tok.slice(0, tok.indexOf("=")) : tok;
     if (!isFlag) {
-      if (prevUnknownFlag) out.push(tok);
-      prevUnknownFlag = false;
       i += 1;
       continue;
     }
-    if (RELAUNCH_DROPPED_BOOL_FLAGS.has(name)) {
-      prevUnknownFlag = false;
-      i += 1;
-      continue;
+    const eq = tok.startsWith("--") ? tok.indexOf("=") : -1;
+    const name = eq >= 0 ? tok.slice(0, eq) : tok;
+    const arity: FlagArity = eq >= 0 ? "none" : (CLAUDE_FLAG_ARITY[name] ?? "none");
+    const values: string[] = [];
+    if (arity === "one" && i + 1 < forwarded.length) values.push(forwarded[i + 1]!);
+    else if (arity === "optional" && i + 1 < forwarded.length && !forwarded[i + 1]!.startsWith("-")) values.push(forwarded[i + 1]!);
+    else if (arity === "variadic") {
+      for (let j = i + 1; j < forwarded.length && !forwarded[j]!.startsWith("-"); j++) values.push(forwarded[j]!);
     }
-    if (SCAN_OPTIONAL_VALUE_FLAGS.has(name)) {
-      if (!tok.includes("=") && i + 1 < argv.length && !argv[i + 1]!.startsWith("-")) i += 1;
-      prevUnknownFlag = false;
-      i += 1;
-      continue;
-    }
-    out.push(tok);
-    if (SCAN_VALUE_FLAGS.has(name)) {
-      if (!tok.includes("=") && i + 1 < argv.length) {
-        out.push(argv[i + 1]!);
-        i += 1;
-      }
-      prevUnknownFlag = false;
-    } else {
-      prevUnknownFlag = !SCAN_BOOL_FLAGS.has(name) && !tok.includes("=");
-    }
-    i += 1;
+    if (!RELAUNCH_DROPPED_FLAGS.has(name)) out.push(tok, ...values);
+    i += 1 + values.length;
   }
   out.push("--resume", sessionId, "--settings", settingsPath);
   if (prompt !== null) {

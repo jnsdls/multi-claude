@@ -43,7 +43,7 @@ Commands:
 `;
 
 describe("parseHelpNames", () => {
-  test("takes names only, from the Options and Commands sections", () => {
+  test("takes names and arities only, from the Options and Commands sections", () => {
     expect(parseHelpNames(SAMPLE)).toEqual({
       flags: [
         "--add-dir",
@@ -62,6 +62,22 @@ describe("parseHelpNames", () => {
         "-v",
       ],
       commands: ["agents", "attach", "kill", "plugin", "plugins", "stop", "update", "upgrade"],
+      flagArity: {
+        "--add-dir": "variadic",
+        "--allowed-tools": "variadic",
+        "--allowedTools": "variadic",
+        "--background": "none",
+        "--bg": "none",
+        "--continue": "none",
+        "--debug": "optional",
+        "--exclude-dynamic-system-prompt-sections": "none",
+        "--resume": "optional",
+        "--version": "none",
+        "-c": "none",
+        "-d": "optional",
+        "-r": "optional",
+        "-v": "none",
+      },
     });
   });
 
@@ -74,19 +90,19 @@ describe("parseHelpNames", () => {
   });
 
   test("empty input gives empty lists", () => {
-    expect(parseHelpNames("")).toEqual({ flags: [], commands: [] });
+    expect(parseHelpNames("")).toEqual({ flags: [], commands: [], flagArity: {} });
   });
 });
 
 describe("driftBetween", () => {
-  const fixture = { version: "2.1.259", flags: ["--bg", "--model"], commands: ["doctor", "mcp"] };
+  const fixture = { version: "2.1.259", flags: ["--bg", "--model"], commands: ["doctor", "mcp"], flagArity: {} };
   test("no difference means no drift", () => {
     const d = driftBetween(fixture, { ...fixture, version: "2.1.300" });
     expect(hasDrift(d)).toBe(false);
     expect(d.installed).toBe("2.1.300");
   });
   test("added and removed names are listed in the report", () => {
-    const d = driftBetween(fixture, { version: "2.1.300", flags: ["--bg", "--new"], commands: ["doctor"] });
+    const d = driftBetween(fixture, { version: "2.1.300", flags: ["--bg", "--new"], commands: ["doctor"], flagArity: {} });
     expect(hasDrift(d)).toBe(true);
     expect(d.flags).toEqual({ added: ["--new"], removed: ["--model"] });
     expect(d.commands).toEqual({ added: [], removed: ["mcp"] });

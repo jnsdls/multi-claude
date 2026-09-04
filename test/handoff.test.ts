@@ -252,6 +252,42 @@ describe("Handoff in the TUI", () => {
     expect(copy.oauthAccount.accountUuid).toBe(`acc-${b}`);
   });
 
+  test("a -p child that walls and exits on its own is handed off after its exit, and the last child's exit is mirrored", async () => {
+    await plantPair();
+    // The first child fires the Limit and exits 0 at once; the second lingers so the Signal dir can be seen alive under it.
+    h.scenario({ calls: [{ hooks: [limitHook()], exit: 0 }, { exit: 3, sleepMs: 1500 }] });
+    const p = h.spawn(["-p", PROMPT]);
+    await waitForRelaunch();
+    const [l0, l1] = h.launches() as [any, any];
+    expect(l0.exitedAt).toBeDefined();
+    expect(l1.startedAt).toBeGreaterThanOrEqual(l0.exitedAt);
+    const dir = l0.env.MCLAUDE_LIMIT_DIR!;
+    expect(existsSync(dir)).toBe(true);
+    expect(flag(l1.argv, "--resume")).toBe(flag(l0.argv, "--session-id"));
+    expect(l1.argv.at(-1)).toBe(NUDGE);
+    const stderr = await new Response(p.stderr as ReadableStream).text();
+    await p.exited;
+    expect(p.exitCode).toBe(3);
+    expect(h.launches()).toHaveLength(2);
+    expect(existsSync(dir)).toBe(false);
+    expect(stderr.trim().split("\n")).toEqual(["mclaude: usage limit on a; continuing on b"]);
+  });
+
+  test("Selection is anchored on the Account the child runs on, not on `active`: a Fallback launch's child still moves", async () => {
+    const { a, b } = await plantPair();
+    h.scenario({ calls: [walled(PRE_TURN, { hooks: [{ ...limitHook(), afterMs: 800 }] }), { exit: 0 }] });
+    const p = h.spawn([]);
+    expect(await h.waitFor(() => h.launches().length === 1)).toBe(true);
+    expect(h.launches()[0]!.env.CLAUDE_CONFIG_DIR).toBe(h.accountDir(a));
+    // Another launch (or a Fallback one) moved the pointer while this child ran.
+    h.setActive(b);
+    await waitForRelaunch();
+    expect(h.launches()[1]!.env.CLAUDE_CONFIG_DIR).toBe(h.accountDir(b));
+    const stderr = await new Response(p.stderr as ReadableStream).text();
+    await p.exited;
+    expect(stderr.trim().split("\n")).toEqual(["mclaude: usage limit on a; continuing on b"]);
+  });
+
   test("a Limit on the relaunched child starts a new Handoff", async () => {
     const a = h.plantAccount({ alias: "a", active: true, usage: reading({ session: 50 }) });
     const b = h.plantAccount({ alias: "b", usage: reading({ session: 10 }) });

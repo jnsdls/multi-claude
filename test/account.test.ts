@@ -236,7 +236,7 @@ describe("account list", () => {
     const row = r.stdout.split("\n")[1]!;
     expect(row).toContain("42% ↻ in 1h");
     expect(row).toContain("7% ↻ in 2d");
-    expect(row).toContain("Opus 12%");
+    expect(row).toContain("Opus 12% ↻ in 2d");
     expect(row).toMatch(/\s5m\s+ok$/);
   });
 

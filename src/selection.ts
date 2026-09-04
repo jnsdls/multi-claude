@@ -41,7 +41,7 @@ export interface Assessment {
 
 export function assess(record: AccountRecord, model: string | null, now: number): Assessment {
   const limit = liveLimit(record, model, now);
-  const windows = applicableWindows(record.usage.lastGood, model);
+  const windows = applicableWindows(record.usage.lastGood, model, now);
   const utilization = maxUtilization(windows);
   const tightest = tightestWindow(windows);
   const unknown = limit === null && (utilization === null || accountIsUnknownForSelection(record, model, now));
@@ -167,7 +167,7 @@ export function earliestWall(records: AccountRecord[], model: string | null, now
  * addedAt order, then Accounts whose last poll brought nothing in addedAt
  * order. The Active account was just handled; Disabled and backoff Accounts
  * are never probed, and a fresh Reading is not asked for again. A Needs login
- * Account may take a slot; the poll skips it.
+ * Account may be among them; the poll skips it.
  */
 export function refreshOrder(records: AccountRecord[], activeId: string | null, model: string | null, now: number): AccountRecord[] {
   const pool = records

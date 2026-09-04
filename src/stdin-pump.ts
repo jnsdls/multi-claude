@@ -2,7 +2,7 @@
 // between the host and the child's stdin, it reads the host's lines and writes
 // each to the current child. With no child attached, lines queue; a Handoff
 // detaches before the kill and reattaches after the resend, so nothing the
-// host wrote during the swap is lost.
+// host wrote during the Handoff is lost.
 import type { Subprocess } from "bun";
 import { userText } from "./transcript.ts";
 

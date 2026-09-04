@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import { CLAUDE_FLAG_ARITY } from "../src/tables.ts";
 import { CHECKED_VERSION, compareVersions, parseVersion, VERSION_FLOOR } from "../src/version.ts";
 
 describe("parseVersion", () => {
@@ -44,5 +45,6 @@ describe("constants", () => {
     expect(fixture.version).toBe(CHECKED_VERSION);
     expect(fixture.flags).toContain("--model");
     expect(fixture.commands).toContain("doctor");
+    expect(fixture.flagArity).toEqual(CLAUDE_FLAG_ARITY);
   });
 });

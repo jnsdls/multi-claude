@@ -5,13 +5,11 @@
 // old child inside the kill window leaves a dangling user message with no
 // error entry, and that retry is what should run.
 
+import { isObject } from "./json.ts";
+
 export const HANDOFF_NUDGE = "Continue from where you left off. The previous attempt stopped at a usage limit.";
 
 export type Resend = { kind: "verbatim"; text: string } | { kind: "nudge"; text: string };
-
-function isObject(v: unknown): v is Record<string, unknown> {
-  return !!v && typeof v === "object" && !Array.isArray(v);
-}
 
 /**
  * The text of a user message when it is user text: a string, or blocks that

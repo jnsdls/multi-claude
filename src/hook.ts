@@ -1,8 +1,8 @@
 // `mclaude hook`: what the Limit hook runs (ADR 0008). Reads all stdin, no-ops
-// unless MCLAUDE_LIMIT_DIR is set, writes one Signal by tmp plus rename, exits 0
+// unless MCLAUDE_LIMIT_DIR is set, writes one Signal atomically, exits 0
 // whatever happens. Never opens config.json.
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { writeFileAtomic } from "./record.ts";
 
 export interface Signal {
   payload: Record<string, unknown>;
@@ -33,11 +33,7 @@ export async function runHook(): Promise<void> {
       accountId: process.env.MCLAUDE_ACCOUNT ?? null,
       receivedAt: new Date().toISOString(),
     };
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-    const name = signalFileName(event, Date.now());
-    const tmp = join(dir, `.${name}.${process.pid}.tmp`);
-    writeFileSync(tmp, JSON.stringify(signal), { mode: 0o600 });
-    renameSync(tmp, join(dir, name));
+    writeFileAtomic(join(dir, signalFileName(event, Date.now())), JSON.stringify(signal));
   } catch {
     // exit 0 whatever happens
   }

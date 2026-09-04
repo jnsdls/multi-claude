@@ -1,6 +1,8 @@
-// The three tables that track a Claude Code release (ADR 0012). Each carries the
+// The four tables that track a Claude Code release (ADR 0012). Each carries the
 // Checked version in src/version.ts. Move them together, in one PR, after a human
-// re-reads all three against `claude --help` and a fresh login's .claude.json.
+// re-reads all four against `claude --help` and a fresh login's .claude.json.
+// The flag arity table is checked against fixtures/claude-help.json by
+// test/version.test.ts, so regenerating the fixture shows what to move.
 
 /** Flags mclaude reads without consuming. Value flags take `--flag value` and `--flag=value`. */
 export const SCAN_VALUE_FLAGS = new Set([
@@ -57,6 +59,94 @@ export const CLAUDE_COMMANDS = new Set([
   "update",
   "upgrade",
 ]);
+
+/**
+ * Every flag claude takes and how many values it consumes: `none` (boolean),
+ * `one`, `optional` (a value only when the next token is not a flag) and
+ * `variadic` (every following token up to the next flag). A Handoff relaunch
+ * walks the user argv with this so a value is never mistaken for the prompt;
+ * a flag not listed here is read as boolean.
+ */
+export type FlagArity = "none" | "one" | "optional" | "variadic";
+
+export const CLAUDE_FLAG_ARITY: Record<string, FlagArity> = {
+  "--add-dir": "variadic",
+  "--agent": "one",
+  "--agents": "one",
+  "--allow-dangerously-skip-permissions": "none",
+  "--allowed-tools": "variadic",
+  "--allowedTools": "variadic",
+  "--append-system-prompt": "one",
+  "--autocompact": "one",
+  "--ax-screen-reader": "none",
+  "--background": "none",
+  "--bare": "none",
+  "--betas": "variadic",
+  "--bg": "none",
+  "--brief": "none",
+  "--chrome": "none",
+  "--cloud": "optional",
+  "--continue": "none",
+  "--dangerously-skip-permissions": "none",
+  "--debug": "optional",
+  "--debug-file": "one",
+  "--disable-slash-commands": "none",
+  "--disallowed-tools": "variadic",
+  "--disallowedTools": "variadic",
+  "--effort": "one",
+  "--environment": "one",
+  "--exclude-dynamic-system-prompt-sections": "none",
+  "--fallback-model": "one",
+  "--file": "variadic",
+  "--fork-session": "none",
+  "--forward-subagent-text": "none",
+  "--from-pr": "optional",
+  "--help": "none",
+  "--ide": "none",
+  "--include-hook-events": "none",
+  "--include-partial-messages": "none",
+  "--input-format": "one",
+  "--json-schema": "one",
+  "--max-budget-usd": "one",
+  "--mcp-config": "variadic",
+  "--model": "one",
+  "--name": "one",
+  "--no-chrome": "none",
+  "--no-session-persistence": "none",
+  "--output-format": "one",
+  "--permission-mode": "one",
+  "--permission-prompts": "one",
+  "--plugin-dir": "one",
+  "--plugin-url": "one",
+  "--print": "none",
+  "--prompt-suggestions": "optional",
+  "--remote-control": "optional",
+  "--remote-control-session-name-prefix": "one",
+  "--replay-user-messages": "none",
+  "--restricted": "none",
+  "--resume": "optional",
+  "--safe-mode": "none",
+  "--session-id": "one",
+  "--setting-sources": "one",
+  "--settings": "one",
+  "--strict-mcp-config": "none",
+  "--system-prompt": "one",
+  "--system-prompt-snapshot": "one",
+  "--teleport": "optional",
+  "--tmux": "none",
+  "--tools": "variadic",
+  "--verbose": "none",
+  "--version": "none",
+  "--worktree": "optional",
+  "-c": "none",
+  "-d": "optional",
+  "-h": "none",
+  "-n": "one",
+  "-p": "none",
+  "-r": "optional",
+  "-v": "none",
+  "-w": "optional",
+};
 
 /** Top-level .claude.json keys that are Preferences (ADR 0010). */
 export const PREFERENCE_KEYS_TOP = [

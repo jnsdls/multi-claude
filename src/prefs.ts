@@ -3,6 +3,7 @@
 // lock dir, skips when a launch is running in the dir, and never blocks a launch.
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { isObject } from "./json.ts";
 import { sharedClaudeJson } from "./paths.ts";
 import { writeFileAtomic } from "./record.ts";
 import { liveRunMarkers } from "./runmarker.ts";
@@ -15,10 +16,6 @@ const APPROVAL_BOOLEANS = new Set<string>(APPROVAL_BOOLEAN_KEYS);
 const MCPJSON_LISTS = new Set<string>(MCPJSON_LIST_KEYS);
 const LOCK_WAIT_MS = 2000;
 const LOCK_STEP_MS = 50;
-
-function isObject(v: unknown): v is Record<string, unknown> {
-  return !!v && typeof v === "object" && !Array.isArray(v);
-}
 
 function projectsOf(json: ClaudeJson): Record<string, Project> {
   const p = json.projects;

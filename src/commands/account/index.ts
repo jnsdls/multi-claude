@@ -1,4 +1,4 @@
-// `mclaude account <subcommand>`: the management commands.
+// `mclaude account <command>`: the management commands.
 import { EXIT, ExitError } from "../../exit.ts";
 
 export const ACCOUNT_HELP = `usage: mclaude account <command>

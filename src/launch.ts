@@ -11,7 +11,6 @@ import { needsLogin, readCredential } from "./credential.ts";
 import { buildChildEnv } from "./env.ts";
 import { EXIT, ExitError } from "./exit.ts";
 import { runHandoff } from "./handoff.ts";
-import type { Signal } from "./hook.ts";
 import { warn } from "./log.ts";
 import { accountDir } from "./paths.ts";
 import { syncPreferences } from "./prefs.ts";
@@ -21,7 +20,7 @@ import { listOrphans, listRecords, readActiveId, readPinnedId, readRecord, resol
 import { writeRunMarker } from "./runmarker.ts";
 import { exitLike, forwardSignals, runCaptured, spawnClaude } from "./spawn.ts";
 import { earliestWall, fallback, refreshOrder, select, type Selection } from "./selection.ts";
-import { cleanupSignalDir, injectSessionArgv, prepareSession, sessionIdFor, watchSignals, type SessionPlan } from "./signal.ts";
+import { cleanupSignalDir, injectSessionArgv, prepareSession, sessionIdFor, sweepSignalDirs, watchSignals, type SessionPlan } from "./signal.ts";
 import { startStdinPump, type StdinPump } from "./stdin-pump.ts";
 import { runSymlinkFarm } from "./symlink-farm.ts";
 import { pollAccount, pollMany } from "./usage.ts";
@@ -39,7 +38,7 @@ import {
 export const HELP_FOOTER = [
   "mclaude: runs Claude Code under the Account with headroom. Reserved words: account, version, hook.",
   "mclaude: own flags: --account <id|alias>, --switch-threshold <n>, --on-exhausted <launch|fail>.",
-  "mclaude: `mclaude -- <args>` forwards everything after the -- to claude unchanged.",
+  "mclaude: `mclaude -- <args>` forwards everything after the -- to claude and drops the -- itself.",
 ].join("\n");
 
 export interface LaunchContext {
@@ -145,9 +144,9 @@ function overrideName(ctx: LaunchContext): string | null {
  * The Account an Override or a Pin names, or null when neither is in force so
  * the caller falls through to its own rule. Never polls: the name is the
  * order, whatever the Record says. A pinned id with no Record and no dir is a
- * dangling pointer, ignored with one line. `session` carries the Requested
- * model at a Session start and is null on a plain Passthrough, where no Limit
- * check applies.
+ * dangling pointer and exits 1 pointing at `account unpin`; a Pin never falls
+ * through to Selection. `session` carries the Requested model at a Session
+ * start and is null on a plain Passthrough, where no Limit check applies.
  */
 async function chooseNamed(ctx: LaunchContext, session: { model: string | null } | null): Promise<Chosen | null> {
   const override = overrideName(ctx);
@@ -157,8 +156,7 @@ async function chooseNamed(ctx: LaunchContext, session: { model: string | null }
   const record = resolveAccount(pinned);
   if (!record) {
     if (listOrphans().includes(pinned)) return checkNamed(ctx, null, "pin", session, pinned);
-    warn(`pinned Account ${pinned} has no Record; ignoring the pin. Run \`mclaude account unpin\``);
-    return null;
+    throw new ExitError(EXIT.REFUSED, `pinned Account ${pinned} does not exist. Run \`mclaude account unpin\``);
   }
   return checkNamed(ctx, record, "pin", session);
 }
@@ -208,8 +206,9 @@ async function checkNamed(
  * A Session start: the Version floor, Selection, then the Limit hook plumbing
  * around the spawn. The watcher starts before the child and stops after it;
  * the Signal dir dies with the launch, after any Limit still being recorded
- * has landed. The exit mirrored is the last child's: a Handoff replaces the
- * child, and the one it killed must not end mclaude.
+ * has landed. The exit mirrored is the last child's: a child's exit is
+ * followed by one drain of the Signal dir, and when that drain ran a Handoff
+ * the new child is the one waited on.
  */
 async function runSessionStart(ctx: LaunchContext): Promise<never> {
   await checkVersionFloor(ctx);
@@ -233,7 +232,6 @@ async function runSessionStart(ctx: LaunchContext): Promise<never> {
     handoffAllowed: handoffAllowedFor(chosen),
     handingOff: false,
     pump: isStreamJsonInput(ctx.scan) ? startStdinPump() : null,
-    ended: deferred(),
     launch: (target, argv) => launchLive(live, target, argv),
   };
   const watcher = watchSignals(plan.limitDir, {
@@ -251,46 +249,34 @@ async function runSessionStart(ctx: LaunchContext): Promise<never> {
       live.handingOff = true;
       live.pump?.detach();
       try {
-        const record = await recordLimit(live.chosen.record.id, signal, { claudePath: ctx.claudePath, fallbackSessionId: live.sessionId });
-        if (record && live.handoffAllowed) await onLimitRecorded(signal, record, live);
+        const record = await recordLimit(live.chosen.record.id, signal, { claudePath: ctx.claudePath, fallbackSessionId: live.sessionId, model: live.model });
+        if (record && live.handoffAllowed) await runHandoff(signal, live);
         else {
           if (record) warn(`usage limit on ${record.alias}; ${live.chosen.source === "pin" ? "pinned" : "--account"} holds, staying`);
           if (live.child) live.pump?.attach(live.child);
         }
+      } catch (e) {
+        warn(`Handoff failed: ${e instanceof Error ? e.message : String(e)}`);
       } finally {
         live.handingOff = false;
-        // The child's own exit was held back while the flag was up; release it now.
-        const child = live.child;
-        if (child && (child.exitCode !== null || child.signalCode !== null)) live.ended.resolve(child);
       }
     },
   });
   let child: Subprocess;
   try {
-    const first = await live.launch(chosen, injected.argv);
-    live.pump?.attach(first);
-    child = await live.ended.promise;
+    child = await live.launch(chosen, injected.argv);
+    live.pump?.attach(child);
+    for (;;) {
+      await child.exited;
+      await watcher.drain();
+      if (live.child === child) break;
+      child = live.child!;
+    }
   } finally {
     await watcher.stop();
     cleanupSignalDir(plan.limitDir);
   }
   exitLike(child);
-}
-
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (error: unknown) => void;
-}
-
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
 }
 
 /** What a running Session start knows about itself; Handoff reads and updates it. */
@@ -312,16 +298,15 @@ export interface LiveSession {
   handingOff: boolean;
   /** The stdin pump on the stream-json path; null when the child inherits stdin. */
   pump: StdinPump | null;
-  /** Resolves with the child whose exit mclaude mirrors: the last one spawned. */
-  ended: Deferred<Subprocess>;
   /** Spawns a child on an Account; resolves once it is up. Handoff relaunches through it. */
   launch: (chosen: Chosen, argv: string[]) => Promise<Subprocess>;
 }
 
 /**
- * One spawn of the session's child. Resolves with the running child. Its exit
- * settles `ended` unless a Handoff is replacing it, in which case the child
- * the Handoff spawns takes over that duty.
+ * One spawn of the session's child. Resolves with the running child and makes
+ * it `live.child`; the caller waits on the child's own `exited`. Nothing in
+ * spawnOn rejects after the child is up, so a rejection here is a failed
+ * spawn and the caller's to handle.
  */
 function launchLive(live: LiveSession, chosen: Chosen, argv: string[]): Promise<Subprocess> {
   return new Promise<Subprocess>((resolve, reject) => {
@@ -333,21 +318,8 @@ function launchLive(live: LiveSession, chosen: Chosen, argv: string[]): Promise<
         live.chosen = chosen;
         resolve(child);
       },
-    }).then(
-      (child) => {
-        if (!live.handingOff && live.child === child) live.ended.resolve(child);
-      },
-      (error) => {
-        reject(error);
-        live.ended.reject(error);
-      },
-    );
+    }).catch(reject);
   });
-}
-
-/** The Handoff seam: Selection, the kill, the relaunch with `--resume` and the resend (ADR 0007, ADR 0009). */
-async function onLimitRecorded(signal: Signal, record: AccountRecord, live: LiveSession): Promise<void> {
-  await runHandoff(signal, record, live);
 }
 
 /** Override, then Pin, then Selection. */
@@ -368,8 +340,8 @@ export function activeNeedsPoll(record: AccountRecord, model: string | null, thr
   const limit = liveLimit(record, model, now);
   if (limit && !(fetched > Date.parse(limit.reportedAt))) return true;
   if (isFresh(usage, now)) return false;
-  const utilization = maxUtilization(applicableWindows(usage.lastGood, model));
-  if (utilization !== null && utilization < threshold && readingStands(usage, now)) return false;
+  const utilization = maxUtilization(applicableWindows(usage.lastGood, model, now));
+  if (utilization !== null && utilization < threshold && readingStands(usage, model, now)) return false;
   return true;
 }
 
@@ -385,7 +357,7 @@ async function chooseBySelection(ctx: LaunchContext, model: string | null): Prom
   }
   const threshold = ctx.settings.switchThreshold;
   const activeId = readActiveId();
-  const now = Date.now();
+  let now = Date.now();
   const poll = { timeoutMs: LAUNCH_TIMEOUT_MS, claudePath: ctx.claudePath, now };
 
   const active = records.find((r) => r.id === activeId);
@@ -400,6 +372,8 @@ async function chooseBySelection(ctx: LaunchContext, model: string | null): Prom
     if (candidates.length > 0) {
       await pollMany(candidates, { ...poll, concurrency: CANDIDATE_CONCURRENCY });
       records = listRecords();
+      // The polls took up to the request budget; a Reset may have passed meanwhile.
+      now = Date.now();
       chosen = select({ records, activeId, model, threshold, now });
     }
   }
@@ -446,11 +420,14 @@ function localTime(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
+/** `claude --version` answers in well under a second; this only guards against a wedged binary. */
+export const VERSION_PROBE_TIMEOUT_MS = 10_000;
+
 /** A Session start on a claude below the Version floor is refused with exit 69. Unparseable output proceeds. */
 export async function checkVersionFloor(ctx: LaunchContext): Promise<void> {
   const active = readActiveId();
   const env = buildChildEnv(active ? { accountDir: accountDir(active), accountId: active } : {});
-  const r = await runCaptured(ctx.claudePath, ["--version"], env, { timeoutMs: 10_000 });
+  const r = await runCaptured(ctx.claudePath, ["--version"], env, { timeoutMs: VERSION_PROBE_TIMEOUT_MS });
   const found = parseVersion(r.stdout);
   if (!found) return;
   if (compareVersions(found, parseVersion(VERSION_FLOOR)!) < 0) {
@@ -476,6 +453,7 @@ export async function spawnOn(
   if (!existsSync(chosen.dir)) {
     throw new ExitError(EXIT.REFUSED, `Account dir for ${chosen.record.alias} (${chosen.record.id}) is missing`);
   }
+  sweepSignalDirs(Date.now());
   runSymlinkFarm(chosen.dir);
   await syncPreferences(chosen.dir);
   if (chosen.makeActive) writeActiveId(chosen.record.id);

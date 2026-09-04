@@ -297,6 +297,19 @@ describe("the Signal dir sweep", () => {
     expect(existsSync(fresh)).toBe(true);
   });
 
+  test("a plain Passthrough sweeps too", async () => {
+    h.plantAccount({ active: true });
+    const old = join(limitsDir(), "old-session");
+    mkdirSync(old, { recursive: true });
+    writeFileSync(join(old, "settings.json"), "{}");
+    const then = new Date(Date.now() - 8 * DAY);
+    utimesSync(join(old, "settings.json"), then, then);
+    utimesSync(old, then, then);
+    const r = await h.run(["doctor"]);
+    expect(r.exitCode).toBe(0);
+    expect(existsSync(old)).toBe(false);
+  });
+
   test("an old dir with one recent file is kept", async () => {
     h.plantAccount({ active: true, usage: reading() });
     const dir = join(limitsDir(), "busy-session");

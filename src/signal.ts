@@ -6,10 +6,11 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wat
 import { join, resolve } from "node:path";
 import { removeValueFlag, type Scan } from "./argv.ts";
 import type { Signal } from "./hook.ts";
+import { isObject } from "./json.ts";
 import { limitsDir, signalDir } from "./paths.ts";
 import { writeFileAtomic } from "./record.ts";
 
-/** A Signal dir whose newest file is older than this is swept at Session start. */
+/** A Signal dir whose newest file is older than this is swept at every launch. */
 export const SIGNAL_DIR_MAX_AGE_MS = 7 * 86_400_000;
 /** The readdir fallback under fs.watch. */
 export const SIGNAL_POLL_MS = 250;
@@ -27,10 +28,6 @@ function shellQuote(s: string): string {
 export function hookCommand(): string {
   const parts = Bun.isStandaloneExecutable ? [process.execPath] : [process.execPath, Bun.main];
   return `${parts.map(shellQuote).join(" ")} hook`;
-}
-
-function isObject(v: unknown): v is Record<string, unknown> {
-  return !!v && typeof v === "object" && !Array.isArray(v);
 }
 
 /**
@@ -86,12 +83,11 @@ export interface SessionPlan {
 }
 
 /**
- * Sweeps stale Signal dirs, creates `limits/<session-id>/` 0700 and writes the
- * merged settings.json there (0600, rewritten every launch so the hook command
- * never goes stale after an upgrade or a move).
+ * Creates `limits/<session-id>/` 0700 and writes the merged settings.json there
+ * (0600, rewritten every launch so the hook command never goes stale after an
+ * upgrade or a move).
  */
 export function prepareSession(scan: Pick<Scan, "settings">, sessionId: string, cwd: string = process.cwd()): SessionPlan {
-  sweepSignalDirs(Date.now());
   const user = scan.settings === undefined ? null : resolveUserSettings(scan.settings, cwd);
   const limitDir = signalDir(sessionId);
   mkdirSync(limitDir, { recursive: true, mode: 0o700 });
@@ -100,7 +96,7 @@ export function prepareSession(scan: Pick<Scan, "settings">, sessionId: string, 
   return { sessionId, limitDir, settingsPath, userSettingsUnparseable: scan.settings !== undefined && user === null };
 }
 
-/** Removes every `limits/` dir whose newest file is older than 7 days. A dir with a recent file is never touched. */
+/** Removes every `limits/` dir whose newest file is older than 7 days. A dir with a recent file is never touched. Runs at every launch. */
 export function sweepSignalDirs(now: number): void {
   const root = limitsDir();
   if (!existsSync(root)) return;
@@ -165,10 +161,12 @@ export interface SignalHandlers {
 
 export interface SignalWatcher {
   /**
-   * Reads the dir one last time, closes the watcher and resolves once every
-   * handler has returned. The last read matters: a hook that fires just before
-   * the child exits has its Signal on disk before the next poll tick.
+   * Reads the dir now and resolves once every handler has returned, the
+   * Handoff one included. The read matters: a hook that fires just before the
+   * child exits has its Signal on disk before the next poll tick.
    */
+  drain(): Promise<void>;
+  /** Drains, then closes the watcher. */
   stop(): Promise<void>;
 }
 
@@ -237,13 +235,17 @@ export function watchSignals(limitDir: string, handlers: SignalHandlers): Signal
   timer.unref();
   scan();
 
+  const drain = async () => {
+    scan();
+    await chain;
+  };
   return {
+    drain,
     async stop() {
-      scan();
+      await drain();
       stopped = true;
       clearInterval(timer);
       watcher?.close();
-      await chain;
     },
   };
 }

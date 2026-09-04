@@ -62,19 +62,24 @@ describe("applicableWindows", () => {
   ];
   for (const [name, model, expected] of cases) {
     test(name, () => {
-      expect(applicableWindows(b, model).map((w) => w.name)).toEqual(expected);
+      expect(applicableWindows(b, model, NOW).map((w) => w.name)).toEqual(expected);
     });
   }
   test("a Window with no Reset carries no evidence and is left out", () => {
     const hollow = body({ sessionReset: null, scoped: [["Opus", 0, null]] });
-    expect(applicableWindows(hollow, null).map((w) => w.name)).toEqual(["seven_day"]);
+    expect(applicableWindows(hollow, null, NOW).map((w) => w.name)).toEqual(["seven_day"]);
+  });
+  test("a Window whose Reset has passed carries no evidence either", () => {
+    const passed = body({ sessionReset: iso(-1), scoped: [["Opus", 100, iso(-H)]] });
+    expect(applicableWindows(passed, null, NOW).map((w) => w.name)).toEqual(["seven_day"]);
+    expect(applicableWindows(passed, null, NOW - 2 * H).map((w) => w.name)).toEqual(["five_hour", "seven_day", "Opus"]);
   });
   test("a null body has no Windows", () => {
-    expect(applicableWindows(null, null)).toEqual([]);
+    expect(applicableWindows(null, null, NOW)).toEqual([]);
   });
   test("a scoped entry of another kind or without a display name is ignored", () => {
     const b2: UsageBody = { ...body(), limits: [{ kind: "weekly_all", percent: 99, resets_at: iso(H), scope: null }, { kind: "weekly_scoped", percent: 50, resets_at: iso(H), scope: { model: null } }] };
-    expect(applicableWindows(b2, null).map((w) => w.name)).toEqual(["five_hour", "seven_day"]);
+    expect(applicableWindows(b2, null, NOW).map((w) => w.name)).toEqual(["five_hour", "seven_day"]);
   });
 });
 
@@ -85,13 +90,13 @@ describe("maxUtilization, tightestWindow, earliestReset", () => {
     expect(earliestReset([])).toBeNull();
   });
   test("the highest Utilization binds", () => {
-    const w = applicableWindows(body({ session: 30, week: 55, scoped: [["Opus", 40, iso(72 * H)]] }), null);
+    const w = applicableWindows(body({ session: 30, week: 55, scoped: [["Opus", 40, iso(72 * H)]] }), null, NOW);
     expect(maxUtilization(w)).toBe(55);
     expect(tightestWindow(w)!.name).toBe("seven_day");
     expect(earliestReset(w)).toBe(iso(2 * H));
   });
   test("a tie goes to the earliest Reset", () => {
-    const w = applicableWindows(body({ session: 50, week: 50, sessionReset: iso(5 * H), weekReset: iso(H) }), null);
+    const w = applicableWindows(body({ session: 50, week: 50, sessionReset: iso(5 * H), weekReset: iso(H) }), null, NOW);
     expect(tightestWindow(w)!.name).toBe("seven_day");
   });
 });
@@ -113,30 +118,37 @@ describe("isFresh", () => {
 
 describe("readingStands", () => {
   test("no Reading does not stand", () => {
-    expect(readingStands(usage({}), NOW)).toBe(false);
+    expect(readingStands(usage({}), null, NOW)).toBe(false);
   });
   test("every Reset ahead", () => {
-    expect(readingStands(usage({ lastGood: body() }), NOW)).toBe(true);
+    expect(readingStands(usage({ lastGood: body() }), null, NOW)).toBe(true);
   });
   test("one passed Reset ends it", () => {
-    expect(readingStands(usage({ lastGood: body({ sessionReset: iso(-1) }) }), NOW)).toBe(false);
+    expect(readingStands(usage({ lastGood: body({ sessionReset: iso(-1) }) }), null, NOW)).toBe(false);
   });
-  test("a passed scoped Reset also ends it", () => {
-    expect(readingStands(usage({ lastGood: body({ scoped: [["Opus", 10, iso(-H)]] }) }), NOW)).toBe(false);
+  test("a passed scoped Reset ends it for that model and for an unknown model, not for another", () => {
+    const u = usage({ lastGood: body({ scoped: [["Opus", 10, iso(-H)]] }) });
+    expect(readingStands(u, null, NOW)).toBe(false);
+    expect(readingStands(u, "claude-opus-4-1", NOW)).toBe(false);
+    expect(readingStands(u, "claude-sonnet-4", NOW)).toBe(true);
   });
   test("Windows with no Reset do not count against it", () => {
-    expect(readingStands(usage({ lastGood: body({ sessionReset: null }) }), NOW)).toBe(true);
+    expect(readingStands(usage({ lastGood: body({ sessionReset: null }) }), null, NOW)).toBe(true);
+  });
+  test("a Reading with no Window at all does not stand", () => {
+    expect(readingStands(usage({ lastGood: body({ sessionReset: null, weekReset: null }) }), null, NOW)).toBe(false);
   });
 });
 
 describe("isUnknown", () => {
-  const passed = body({ sessionReset: iso(-H) });
+  const sessionOnly = (reset: string | null) => ({ ...body({ sessionReset: reset }), seven_day: null });
   const cases: [string, ReturnType<typeof usage>, boolean][] = [
     ["no Reading at all", usage({}), true],
     ["a Reading that stands", usage({ lastGood: body(), fetchedAt: iso(-3 * H), lastAttemptAt: iso(-3 * H) }), false],
-    ["a passed Reset with no attempt since is stale, not Unknown", usage({ lastGood: passed, fetchedAt: iso(-3 * H), lastAttemptAt: iso(-3 * H) }), false],
-    ["a passed Reset and a failed attempt since", usage({ lastGood: passed, fetchedAt: iso(-3 * H), lastAttemptAt: iso(-10_000) }), true],
-    ["a passed Reset and a fetch since (the body still carries the old Reset)", usage({ lastGood: passed, fetchedAt: iso(-10_000), lastAttemptAt: iso(-10_000) }), false],
+    ["every Reset passed, no attempt since", usage({ lastGood: sessionOnly(iso(-H)), fetchedAt: iso(-3 * H), lastAttemptAt: iso(-3 * H) }), true],
+    ["every Reset passed, a failed attempt since", usage({ lastGood: sessionOnly(iso(-H)), fetchedAt: iso(-3 * H), lastAttemptAt: iso(-10_000) }), true],
+    ["one Window passed while another stands", usage({ lastGood: body({ sessionReset: iso(-H) }), fetchedAt: iso(-3 * H), lastAttemptAt: iso(-10_000) }), false],
+    ["a hollow Reading", usage({ lastGood: body({ sessionReset: null, weekReset: null }), fetchedAt: iso(-10_000), lastAttemptAt: iso(-10_000) }), true],
   ];
   for (const [name, u, expected] of cases) {
     test(name, () => {

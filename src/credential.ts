@@ -44,6 +44,9 @@ export function parseCredential(text: string): OAuthCredential | null {
   };
 }
 
+/** `security` answers at once or hangs on a locked Keychain; wait this long before giving up. */
+const KEYCHAIN_TIMEOUT_MS = 2_000;
+
 /** Exit 44 means no item. Any other failure, a timeout included, also falls back to the file. */
 async function readKeychain(accountDir: string): Promise<string | null> {
   const user = process.env.USER;
@@ -52,7 +55,7 @@ async function readKeychain(accountDir: string): Promise<string | null> {
     ["/usr/bin/security", "find-generic-password", "-a", user, "-s", keychainServiceName(accountDir), "-w"],
     { stdin: "ignore", stdout: "pipe", stderr: "ignore" },
   );
-  const timer = setTimeout(() => child.kill("SIGKILL"), 2000);
+  const timer = setTimeout(() => child.kill("SIGKILL"), KEYCHAIN_TIMEOUT_MS);
   try {
     const out = await new Response(child.stdout as ReadableStream).text();
     const code = await child.exited;
