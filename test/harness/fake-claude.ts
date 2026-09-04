@@ -217,7 +217,7 @@ if (behaviour.echoStdin) {
 if (behaviour.transcript) {
   const t = behaviour.transcript;
   mkdirSync(join(t.path, ".."), { recursive: true });
-  writeFileSync(t.path, t.lines.map((l: unknown) => JSON.stringify(l)).join("\n") + "\n");
+  writeFileSync(t.path, `${t.lines.map((l: unknown) => JSON.stringify(l)).join("\n")}\n`);
 }
 
 async function runHooks() {

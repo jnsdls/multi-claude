@@ -1,7 +1,7 @@
 // Every entry of the Shared home is a per-entry symlink into the Account dir,
 // unknown entries included, except the private list. Idempotent; reruns before
 // every launch.
-import { existsSync, lstatSync, mkdirSync, readdirSync, readlinkSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readlinkSync, rmSync, symlinkSync, type Stats } from "node:fs";
 import { join } from "node:path";
 import { warn } from "./log.ts";
 import { sharedHome } from "./paths.ts";
@@ -22,7 +22,7 @@ export function runSymlinkFarm(accountDirPath: string, shared: string = sharedHo
     if (PRIVATE_ENTRIES.has(entry)) continue;
     const target = join(shared, entry);
     const link = join(accountDirPath, entry);
-    let st;
+    let st: Stats | null;
     try {
       st = lstatSync(link);
     } catch {

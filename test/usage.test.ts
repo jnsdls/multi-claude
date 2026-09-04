@@ -61,7 +61,7 @@ describe("list --refresh", () => {
     expect(req.token).toBe(`sk-ant-oat01-${id}`);
     expect(req.headers["anthropic-beta"]).toBe("oauth-2025-04-20");
     expect(req.headers["user-agent"]).toBe(`mclaude/${VERSION}`);
-    expect(req.headers["accept"]).toBe("application/json");
+    expect(req.headers.accept).toBe("application/json");
   });
 
   test("a healthy body with a scoped Window fills the table and the Record", async () => {

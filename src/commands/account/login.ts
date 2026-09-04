@@ -5,7 +5,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { EXIT, ExitError } from "../../exit.ts";
 import { accountDir, sharedClaudeJson } from "../../paths.ts";
 import { accountClaudeJson, readClaudeJson, seedClaudeJson, syncPreferences } from "../../prefs.ts";
-import { updateRecord, writeFileAtomic } from "../../record.ts";
+import { type Identity, updateRecord, writeFileAtomic } from "../../record.ts";
 import { runSymlinkFarm } from "../../symlink-farm.ts";
 import { claudeForLogin, identityLine, loginInDir, logoutInDir, parseLoginFlags, requireAccount, sameIdentity } from "./common.ts";
 
@@ -23,7 +23,7 @@ export async function runLogin(args: string[]): Promise<number> {
   }
   await syncPreferences(dir);
 
-  let identity;
+  let identity: Identity;
   try {
     identity = await loginInDir(claudePath, dir, record.id, flags);
     if (!sameIdentity(record.identity, identity)) {

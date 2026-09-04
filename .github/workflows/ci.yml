@@ -1,13 +1,34 @@
+# Every pull request and every push to main runs lint, typecheck, and the test
+# suite on Linux and macOS, then a --version smoke test against the compiled
+# host binary through both channels. The `ci` job at the end is the one
+# required check on main; it fails when any job before it did.
 name: ci
 
 on:
   push:
+    branches: [main]
+    tags: ["v*"]
   pull_request:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run typecheck
+
   test:
     strategy:
       fail-fast: false
@@ -22,7 +43,6 @@ jobs:
           bun-version: 1.4.0
 
       - run: bun install --frozen-lockfile
-      - run: bunx tsc --noEmit
       - run: bun run build
       - run: bun test
 
@@ -57,3 +77,14 @@ jobs:
           rm "node_modules/multi-claude-$TARGET"
           if bin/mclaude --version; then echo "expected a failure"; exit 1; fi
           [ "$(bin/mclaude --version 2>/dev/null; echo $?)" = 69 ]
+
+  # One name for the branch ruleset to require. `if: always()` keeps it running
+  # when a dependency failed or was cancelled, so it can turn red instead of
+  # being skipped, which GitHub would count as passing.
+  ci:
+    if: always()
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
