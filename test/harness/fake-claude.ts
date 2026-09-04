@@ -1,7 +1,7 @@
 // The scripted fake claude. Driven by <FAKE_CLAUDE_STATE>/scenario.json; records
 // every call to <FAKE_CLAUDE_STATE>/calls/<seq>.json. See harness.ts for the
 // scenario shape.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const state = process.env.FAKE_CLAUDE_STATE;
@@ -37,9 +37,12 @@ const record: Record<string, unknown> = {
   startedAt: Date.now(),
   stdinLines: [] as string[],
 };
+// Written whole then renamed: the harness polls this file while it is rewritten.
 function save(extra: Record<string, unknown> = {}) {
   Object.assign(record, extra);
-  writeFileSync(join(state!, "calls", `${seq}.json`), JSON.stringify(record));
+  const file = join(state!, "calls", `${seq}.json`);
+  writeFileSync(`${file}.tmp`, JSON.stringify(record));
+  renameSync(`${file}.tmp`, file);
 }
 save();
 
