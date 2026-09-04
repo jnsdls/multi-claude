@@ -136,3 +136,11 @@ _Avoid_: Refresh, re-auth, token bump, warm-up
 **Session start**:
 A Passthrough that opens or resumes a conversation, so it spends tokens and runs Selection. Every other Passthrough runs on the Active account with no usage reading.
 _Avoid_: Launch (that is mclaude's own act), interactive
+
+**Checked version**:
+The Claude Code release a person last read mclaude's flag, Session start and Preferences tables against. Moves only when someone re-reads all three; shown by `version`, never at launch.
+_Avoid_: Supported version, tested version, pinned claude
+
+**Version floor**:
+The oldest Claude Code release a Session start will run on, because an older one loses the conversation at Handoff. Older is refused; newer than the Checked version is allowed.
+_Avoid_: Minimum version, required version, compatibility floor
