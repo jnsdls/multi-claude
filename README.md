@@ -15,6 +15,16 @@ npm install -g @jnsdls/multi-claude
 npx @jnsdls/multi-claude --version
 ```
 
+### Homebrew
+
+The tap is `jnsdls/homebrew-tap`. Its formula downloads the release tarball for your platform and checks it against the release's sha256, so it needs neither Bun nor Node. macOS on Apple silicon and Intel, Linux on x64 and arm64.
+
+```sh
+brew install jnsdls/tap/mclaude
+```
+
+The release workflow rewrites the formula on every tag, so `brew upgrade` follows releases.
+
 ### Release tarball
 
 Each release on GitHub carries one tarball per platform and a checksum file. No Bun or Node needed.

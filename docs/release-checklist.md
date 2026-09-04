@@ -21,7 +21,8 @@ The `release` workflow runs on the tag. Confirm on the run:
 
 - the version check passed (package.json equals the tag),
 - `gh release view v<version>` lists `mclaude-darwin-arm64.tar.gz`, `mclaude-darwin-x64.tar.gz`, `mclaude-linux-x64.tar.gz`, `mclaude-linux-arm64.tar.gz` and `SHASUMS256.txt`,
-- `npm view @jnsdls/multi-claude version` prints the new version, and so does each of `multi-claude-darwin-arm64`, `multi-claude-darwin-x64`, `multi-claude-linux-x64`, `multi-claude-linux-arm64`.
+- `npm view @jnsdls/multi-claude version` prints the new version, and so does each of `multi-claude-darwin-arm64`, `multi-claude-darwin-x64`, `multi-claude-linux-x64`, `multi-claude-linux-arm64`,
+- `Formula/mclaude.rb` in [jnsdls/homebrew-tap](https://github.com/jnsdls/homebrew-tap) has a fresh commit named `mclaude <version>`, and `brew upgrade mclaude` on a Mac with the tap installs it.
 
 npm gets five packages: the four platform packages, each carrying one compiled binary, then `@jnsdls/multi-claude`, whose `optionalDependencies` pin them at the same version. `bun run build:binaries` stages all five under `npm/` from the repo's `package.json` version (`scripts/stage.ts`); the repo's own `package.json` is private and never published. The workflow publishes by trusted publishing (OIDC), so no npm token is stored anywhere. npm only lets a trusted publisher be configured for a package that already exists, which makes the first release a one-off by hand:
 
@@ -44,3 +45,27 @@ npm gets five packages: the four platform packages, each carrying one compiled b
    The same setting is under Trusted publishing on each package's npm page. Then turn on "Require two-factor authentication and disallow tokens" under Publishing access on each, so the workflow is the only publisher.
 
 Every later release is the tag alone.
+
+## Homebrew
+
+`brew install jnsdls/tap/mclaude` reads `Formula/mclaude.rb` from the `jnsdls/homebrew-tap` repo. The formula is generated, never edited: `scripts/homebrew.ts` renders it from the version and `SHASUMS256.txt`, and `scripts/publish-brew.sh` commits it to the tap through the GitHub contents API. The workflow runs that last, after npm, so a tap failure never holds back a release.
+
+The workflow's own token cannot write to another repo, so the step reads `HOMEBREW_TAP_TOKEN`, a repo secret. One-off setup, by hand:
+
+1. On GitHub, Settings, Developer settings, Personal access tokens, Fine-grained tokens: a token for the `jnsdls` account, repository access limited to `homebrew-tap`, permission Contents: read and write. Set an expiry; a year is fine.
+2. Store it as the `HOMEBREW_TAP_TOKEN` secret on `jnsdls/multi-claude`:
+
+   ```sh
+   gh secret set HOMEBREW_TAP_TOKEN --repo jnsdls/multi-claude
+   ```
+
+   The token expiry is the one thing that can break this step later. When it does, the release run fails on "Update the Homebrew formula" alone, and the fix is a new token plus the same `gh secret set`.
+
+To push the formula by hand for a release that is already on GitHub:
+
+```sh
+gh release download v<version> --pattern SHASUMS256.txt -O /tmp/SHASUMS256.txt
+HOMEBREW_TAP_TOKEN="$(gh auth token)" bun run publish:brew v<version> /tmp/SHASUMS256.txt
+```
+
+To check a formula change before it ships: `bun run scripts/homebrew.ts <version> SHASUMS256.txt > /opt/homebrew/Library/Taps/jnsdls/homebrew-tap/Formula/mclaude.rb`, then `brew audit --strict --online jnsdls/tap/mclaude`, `brew style jnsdls/tap/mclaude`, `brew reinstall jnsdls/tap/mclaude` and `brew test jnsdls/tap/mclaude`.

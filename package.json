@@ -21,7 +21,8 @@
     "typecheck": "bunx tsc --noEmit",
     "check:drift": "bun run scripts/check-drift.ts",
     "extract:help": "bun run scripts/extract-claude-help.ts",
-    "publish:npm": "sh scripts/publish-npm.sh"
+    "publish:npm": "sh scripts/publish-npm.sh",
+    "publish:brew": "sh scripts/publish-brew.sh"
   },
   "devDependencies": {
     "@types/bun": "^1.3.0",

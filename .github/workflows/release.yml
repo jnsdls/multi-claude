@@ -65,3 +65,10 @@ jobs:
 
       - name: Publish the platform packages, then @jnsdls/multi-claude
         run: sh scripts/publish-npm.sh
+
+      # Last, so a tap failure never holds back npm. HOMEBREW_TAP_TOKEN is a
+      # repo secret: a fine-grained token with contents: write on the tap.
+      - name: Update the Homebrew formula
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: sh scripts/publish-brew.sh "$GITHUB_REF_NAME" out/SHASUMS256.txt
