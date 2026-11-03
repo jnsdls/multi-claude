@@ -73,7 +73,8 @@ export function exitLike(child: Subprocess): never {
   process.exit(child.exitCode ?? 1);
 }
 
-function signalNumber(sig: string): number {
+function signalNumber(sig: string | number): number {
+  if (typeof sig === "number") return sig;
   return (constants.signals as Record<string, number>)[sig] ?? constants.signals.SIGTERM;
 }
 
