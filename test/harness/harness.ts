@@ -72,7 +72,7 @@ export interface CallRecord {
 
 export interface RunResult {
   exitCode: number | null;
-  signal: string | null;
+  signal: string | number | null;
   stdout: string;
   stderr: string;
 }
