@@ -51,6 +51,9 @@ const INIT = JSON.stringify({
   request_id: "req-1",
   request: { subtype: "initialize", hooks: {} },
 });
+/** What `query.setMcpServers()` writes; only the child that read it holds the host's in-process servers. */
+const setServers = (requestId: string, servers: Record<string, unknown>) =>
+  JSON.stringify({ type: "control_request", request_id: requestId, request: { subtype: "mcp_set_servers", servers } });
 const hostUser = (text: string) =>
   JSON.stringify({
     type: "user",
@@ -129,6 +132,19 @@ describe("Handoff under a stream-json host", () => {
     await p.exited;
     expect(p.exitCode).toBe(0);
     expect(stderr.trim().split("\n")).toEqual(["mclaude: usage limit on a; continuing on b"]);
+  }, 20_000);
+
+  test("replays the host's latest mcp_set_servers ahead of the resend, and nothing else of the control protocol", async () => {
+    await plantPair();
+    h.scenario({ calls: [walled(PRE_TURN), { echoStdin: true, exitAfterStdinLines: 2, sleepMs: 10_000, exit: 0 }] });
+    const p = h.spawn(SDK_ARGS, { stdin: "pipe" });
+    const stale = setServers("req-2", { old: { type: "sdk", name: "old" } });
+    const latest = setServers("req-3", { "t3-code": { type: "sdk", name: "t3-code" } });
+    write(p, INIT, stale, latest, hostUser(PROMPT));
+
+    expect(await h.waitFor(() => h.launches()[1]?.exitedOnStdin === true, 10_000)).toBe(true);
+    expect(h.launches()[1]!.stdinLines).toEqual([latest, hostUser(PROMPT)]);
+    await p.exited;
   }, 20_000);
 
   test("a mid-turn wall sends the nudge as a user message the host never wrote", async () => {
