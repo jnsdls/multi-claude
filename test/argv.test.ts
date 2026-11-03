@@ -221,6 +221,50 @@ describe("relaunchArgv", () => {
     ]);
   });
 
+  test("stream-json has no prompt to drop, so the value of a flag the table does not know survives", () => {
+    // The argv t3/code hands mclaude. `--thinking` and `--thinking-display` are
+    // hidden from `claude --help`, so no drift check can put them in the table.
+    const host = [
+      "--output-format",
+      "stream-json",
+      "--input-format",
+      "stream-json",
+      "--thinking",
+      "adaptive",
+      "--thinking-display",
+      "summarized",
+      "--permission-prompt-tool",
+      "stdio",
+      "--allowedTools",
+      "mcp__t3-code__*",
+      "--add-dir",
+      "/a",
+      "--session-id=old",
+      "--settings",
+      '{"fastMode":false}',
+    ];
+    expect(relaunchArgv(host, SID, PATH, null)).toEqual([
+      "--output-format",
+      "stream-json",
+      "--input-format",
+      "stream-json",
+      "--thinking",
+      "adaptive",
+      "--thinking-display",
+      "summarized",
+      "--permission-prompt-tool",
+      "stdio",
+      "--allowedTools",
+      "mcp__t3-code__*",
+      "--add-dir",
+      "/a",
+      "--resume",
+      SID,
+      "--settings",
+      PATH,
+    ]);
+  });
+
   test("a flag the table does not know is boolean, and an inline value takes nothing more", () => {
     expect(relaunchArgv(["--brand-new", "hi"], SID, PATH, "again")).toEqual([
       "--brand-new",

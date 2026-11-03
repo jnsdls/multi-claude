@@ -305,6 +305,10 @@ const RELAUNCH_DROPPED_FLAGS = new Set(["--session-id", "--settings", "--resume"
  * `-`, an `optional` flag the next token when it does not start with `-`. A
  * flag the table does not know is boolean. Everything after a bare `--` is
  * prompt text and goes.
+ *
+ * A null prompt is the stream-json path, where a positional is never a prompt,
+ * so every token stays and the table only finds the values of the dropped
+ * flags. Hosts pass flags `claude --help` hides, which no table can track.
  */
 export function relaunchArgv(
   forwarded: readonly string[],
@@ -319,6 +323,7 @@ export function relaunchArgv(
     if (tok === "--") break;
     const isFlag = tok.startsWith("-") && tok !== "-";
     if (!isFlag) {
+      if (prompt === null) out.push(tok);
       i += 1;
       continue;
     }

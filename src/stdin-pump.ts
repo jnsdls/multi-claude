@@ -2,15 +2,17 @@
 // between the host and the child's stdin, it reads the host's lines and writes
 // each to the current child. With no child attached, lines queue; a Handoff
 // detaches before the kill and reattaches after the resend, so nothing the
-// host wrote during the Handoff is lost.
+// host wrote during the Handoff is lost. The host's MCP servers live in the
+// child that read its `mcp_set_servers`, so the latest one goes ahead of the
+// resend; the rest of the control protocol needs no replay.
 import type { Subprocess } from "bun";
 import { userText } from "./transcript.ts";
 
 export interface StdinPump {
   /**
-   * Forwards to this child from now on: `first` goes in ahead of the queue,
-   * then the queued lines minus those `drop` rejects, then end-of-file when the
-   * host already closed its side.
+   * Forwards to this child from now on: `first`, behind the host's latest
+   * `mcp_set_servers`, goes in ahead of the queue, then the queued lines minus
+   * those `drop` rejects, then end-of-file when the host already closed its side.
    */
   attach(child: Subprocess, opts?: { first?: string; drop?: (line: string) => boolean }): void;
   /** Stops forwarding; lines queue until the next attach. */
@@ -30,6 +32,15 @@ export function userTextOfLine(line: string): string | null {
     return message && typeof message === "object" ? userText(message.content) : null;
   } catch {
     return null;
+  }
+}
+
+function isSetMcpServersLine(line: string): boolean {
+  try {
+    const v = JSON.parse(line);
+    return v?.type === "control_request" && v.request?.subtype === "mcp_set_servers";
+  } catch {
+    return false;
   }
 }
 
@@ -67,6 +78,7 @@ export function startStdinPump(source: ReadableStream<Uint8Array> = Bun.stdin.st
   const queued: string[] = [];
   // The most recent host line per user text, bounded so a long session does not grow it forever.
   const userLines = new Map<string, string>();
+  let mcpServersLine: string | null = null;
   let closed = false;
 
   const forward = (line: string) => {
@@ -84,6 +96,7 @@ export function startStdinPump(source: ReadableStream<Uint8Array> = Bun.stdin.st
           const line = buf.slice(0, nl);
           buf = buf.slice(nl + 1);
           if (!line.trim()) continue;
+          if (isSetMcpServersLine(line)) mcpServersLine = line;
           const text = userTextOfLine(line);
           if (text !== null) {
             userLines.delete(text);
@@ -104,7 +117,10 @@ export function startStdinPump(source: ReadableStream<Uint8Array> = Bun.stdin.st
   return {
     attach(child, opts = {}) {
       target = child;
-      if (opts.first !== undefined) writeLine(child, opts.first);
+      if (opts.first !== undefined) {
+        if (mcpServersLine) writeLine(child, mcpServersLine);
+        writeLine(child, opts.first);
+      }
       for (const line of queued.splice(0)) if (!opts.drop?.(line)) writeLine(child, line);
       if (closed) endStdin(child);
     },

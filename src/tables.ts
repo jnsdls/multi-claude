@@ -68,7 +68,8 @@ export const CLAUDE_COMMANDS = new Set([
  * `one`, `optional` (a value only when the next token is not a flag) and
  * `variadic` (every following token up to the next flag). A Handoff relaunch
  * walks the user argv with this so a value is never mistaken for the prompt;
- * a flag not listed here is read as boolean.
+ * a flag not listed here is read as boolean. Taken from `claude --help`, so a
+ * hidden flag is never listed.
  */
 export type FlagArity = "none" | "one" | "optional" | "variadic";
 
