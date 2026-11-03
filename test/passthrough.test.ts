@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, symlinkSync, writeFileSync, existsSync, lstatSync
 import { dirname, join } from "node:path";
 
 const bunDir = dirname(process.execPath);
+import { CHECKED_VERSION } from "../src/version.ts";
 import { Harness } from "./harness/harness.ts";
 
 let h: Harness;
@@ -31,6 +32,13 @@ describe("passthrough", () => {
     const r = await h.run(["--", "account", "list", "--account", "x"]);
     expect(r.exitCode).toBe(0);
     expect(h.launches()[0]!.argv.slice(0, 4)).toEqual(["account", "list", "--account", "x"]);
+  });
+
+  test("--desktop gets no injected flags, which claude would refuse", async () => {
+    h.plantAccount({ active: true });
+    const r = await h.run(["--desktop", "--continue"]);
+    expect(r.exitCode).toBe(0);
+    expect(h.launches()[0]!.argv).toEqual(["--desktop", "--continue"]);
   });
 
   test("own flags are stripped wherever they appear before --", async () => {
@@ -131,7 +139,7 @@ describe("passthrough", () => {
     expect(r.stdout).toContain("claude 2.1.259 (Claude Code)");
     expect(r.stdout).toContain(`claude path ${h.fakeClaude}`);
     expect(r.stdout).toContain("bun ");
-    expect(r.stdout).toContain("checked version 2.1.259");
+    expect(r.stdout).toContain(`checked version ${CHECKED_VERSION}`);
     expect(r.stdout).toContain("version floor 2.1.223");
     expect(r.stdout).not.toContain("newer than checked");
   });
