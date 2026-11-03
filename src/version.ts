@@ -4,7 +4,7 @@ declare const MCLAUDE_VERSION: string;
 export const VERSION: string = typeof MCLAUDE_VERSION === "string" ? MCLAUDE_VERSION : "0.0.0-dev";
 
 /** The Claude Code release a person last read the four tables against (ADR 0012). */
-export const CHECKED_VERSION = "2.1.259";
+export const CHECKED_VERSION = "2.1.316";
 
 /** The oldest Claude Code release a Session start will run on (ADR 0012). */
 export const VERSION_FLOOR = "2.1.223";

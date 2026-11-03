@@ -110,6 +110,11 @@ describe("classify", () => {
     ["logs", "abc"],
     ["auth", "status"],
     ["--model", "opus", "doctor"],
+    ["purge", "--dry-run"],
+    ["project", "purge"],
+    ["--desktop"],
+    ["--desktop", "--continue"],
+    ["--desktop", "--resume", "abc"],
   ];
   for (const argv of plain) {
     test(`passthrough: ${argv.join(" ")}`, () => expect(classify(scanArgv(argv))).toBe("passthrough"));

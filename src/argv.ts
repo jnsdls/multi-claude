@@ -100,6 +100,7 @@ export interface Scan {
   settings?: string;
   bare: boolean;
   safeMode: boolean;
+  desktop: boolean;
   version: boolean;
   help: boolean;
   /** Tokens that did not look like flags, plus everything after a bare `--`. */
@@ -119,6 +120,7 @@ export function scanArgv(argv: readonly string[]): Scan {
     bg: false,
     bare: false,
     safeMode: false,
+    desktop: false,
     version: false,
     help: false,
     positionals: [],
@@ -218,6 +220,9 @@ function setBoolFlag(scan: Scan, name: string): void {
     case "--safe-mode":
       scan.safeMode = true;
       break;
+    case "--desktop":
+      scan.desktop = true;
+      break;
   }
 }
 
@@ -236,7 +241,8 @@ export type Classification =
 /**
  * Session starts are the TUI default, a positional prompt, `-p`, `--resume`,
  * `--continue` and `--bg`. A first positional that is one of claude's own
- * commands is a plain Passthrough.
+ * commands is a plain Passthrough, and so is `--desktop`: the session runs in the
+ * Desktop app, and claude refuses it alongside `--session-id` or `--settings`.
  */
 export function classify(scan: Scan): Classification {
   if (scan.help) return "help";
@@ -248,6 +254,7 @@ export function classify(scan: Scan): Classification {
     return "passthrough";
   }
   if (first !== undefined && CLAUDE_COMMANDS.has(first)) return "passthrough";
+  if (scan.desktop) return "passthrough";
   return "session-start";
 }
 

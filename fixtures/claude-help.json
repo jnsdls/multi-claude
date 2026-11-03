@@ -1,5 +1,5 @@
 {
-  "version": "2.1.259",
+  "version": "2.1.316",
   "flags": [
     "--add-dir",
     "--agent",
@@ -21,6 +21,7 @@
     "--dangerously-skip-permissions",
     "--debug",
     "--debug-file",
+    "--desktop",
     "--disable-slash-commands",
     "--disallowed-tools",
     "--disallowedTools",
@@ -92,7 +93,7 @@
     "mcp",
     "plugin",
     "plugins",
-    "project",
+    "purge",
     "respawn",
     "rm",
     "setup-token",
@@ -122,6 +123,7 @@
     "--dangerously-skip-permissions": "none",
     "--debug": "optional",
     "--debug-file": "one",
+    "--desktop": "none",
     "--disable-slash-commands": "none",
     "--disallowed-tools": "variadic",
     "--disallowedTools": "variadic",

@@ -28,13 +28,15 @@ export const SCAN_BOOL_FLAGS = new Set([
   "--background",
   "--bare",
   "--safe-mode",
+  "--desktop",
 ]);
 
 /**
  * claude's own subcommands. A first positional that is one of these is a plain
  * Passthrough (no Selection, no poll). Any other positional is a prompt, which is a
  * Session start. mclaude never refuses an unknown word; drift here only changes
- * whether a launch polls.
+ * whether a launch polls. `project` left `--help` at 2.1.316 but stays: the floor
+ * predates that, and claude still takes the word.
  */
 export const CLAUDE_COMMANDS = new Set([
   "agents",
@@ -50,6 +52,7 @@ export const CLAUDE_COMMANDS = new Set([
   "plugin",
   "plugins",
   "project",
+  "purge",
   "respawn",
   "rm",
   "setup-token",
@@ -90,6 +93,7 @@ export const CLAUDE_FLAG_ARITY: Record<string, FlagArity> = {
   "--dangerously-skip-permissions": "none",
   "--debug": "optional",
   "--debug-file": "one",
+  "--desktop": "none",
   "--disable-slash-commands": "none",
   "--disallowed-tools": "variadic",
   "--disallowedTools": "variadic",
